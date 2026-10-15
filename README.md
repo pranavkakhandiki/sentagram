@@ -84,14 +84,36 @@ Result sharing tries the native Web Share API, then the clipboard. If neither is
 
 The interface uses semantic buttons, visible focus styles, native modal dialogs with focus containment and Escape handling, polite screen-reader announcements, touch targets, safe-area padding, and reduced-motion support. Keyboard users can Tab between tiles and use Enter/Space to place or return them. Alt + Left/Right (or Up/Down) swaps the focused word with a neighbor while keeping focus on that same tile.
 
-## Deploy later
+## Publish with GitHub Pages
 
-This project has not been publicly deployed. To publish when ready:
+The included `.github/workflows/deploy.yml` tests, builds, and deploys the site when you push to `main`. It can also be run manually from the repository's Actions tab.
+
+1. Open your GitHub repository's **Settings → Pages**.
+2. Under **Build and deployment**, select **GitHub Actions** as the source.
+3. Commit and push the deployment files to `main`.
+4. Open **Actions → Deploy Sentagram to GitHub Pages** and wait for a successful run. Its deployment link opens the live game.
+
+For `pranavkakhandiki/sentagram`, the project URL is `https://pranavkakhandiki.github.io/sentagram/`.
+
+The workflow sets `GITHUB_PAGES_BASE` from the repository name, so JavaScript, styles, fonts, and the favicon resolve under the project URL. Local development continues to use `/`. GitHub supplies the deployment token; no personal access token or repository secret is needed for this workflow.
+
+To reproduce the Pages build locally:
+
+```sh
+GITHUB_PAGES_BASE=/sentagram/ npm run build
+GITHUB_PAGES_BASE=/sentagram/ npm run preview
+```
+
+Open the preview URL with `/sentagram/` appended. For a root-level Pages site or a custom domain, set `GITHUB_PAGES_BASE` to `/` in the workflow.
+
+## Other static hosts
+
+To use another static hosting service:
 
 - **Vercel:** import the repository, choose the Vite preset, use `npm run build`, and publish `dist`.
 - **Netlify:** use `npm run build` as the build command and `dist` as the publish directory.
 - **Other static hosts:** upload the contents of `dist` after building.
 
-There are no environment variables or server requirements. This is a single page, so no routing rewrite is needed. For hosting under a subdirectory, set Vite's `base` and update the favicon path. Native sharing and clipboard features generally require HTTPS or localhost.
+There are no server requirements. This is a single page, so no routing rewrite is needed. Root-level hosts use the default build with no environment variables. For hosting under a subdirectory, set `GITHUB_PAGES_BASE` to that path when building; the favicon follows the configured base automatically. Native sharing and clipboard features generally require HTTPS or localhost.
 
 DM Sans is included through Fontsource under the SIL Open Font License. Its license is retained in `public/fonts/` and included in the production build.
