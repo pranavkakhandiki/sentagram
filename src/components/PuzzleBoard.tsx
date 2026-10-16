@@ -6,6 +6,7 @@ import type { Puzzle, PuzzleProgress } from '../game/types';
 import { acceptedSentence, bankLabel, sentenceLabel } from '../game/validation';
 import { useSentenceSwap } from '../hooks/useSentenceSwap';
 import { WordTile } from './WordTile';
+import { MAX_GUESSES } from '../game/state';
 
 interface BoardProps {
   puzzle: Puzzle;
@@ -117,7 +118,7 @@ export function PuzzleBoard({
         swap with a neighbor.
       </p>
       <div
-        className={`sentence-area ${finished ? 'sentence-finished' : ''} ${drag.preview ? 'is-swapping' : ''}`}
+        className={`sentence-area ${finished ? `sentence-finished sentence-${progress.status}` : ''} ${drag.preview ? 'is-swapping' : ''}`}
       >
         <div className="sentence-sizer" aria-hidden="true">
           {puzzle.wordBank.map((token) => (
@@ -195,6 +196,12 @@ export function PuzzleBoard({
                 </span>
               );
             })}
+          </div>
+          <div className="guesses-remaining" role="status" aria-label={`${MAX_GUESSES - progress.guesses.length} guesses remaining`}>
+            <span>Guesses left</span>
+            <span className="guess-dots" aria-hidden="true">
+              {Array.from({ length: MAX_GUESSES }, (_, index) => <span key={index} className={`guess-dot ${index < MAX_GUESSES - progress.guesses.length ? 'available' : ''}`} />)}
+            </span>
           </div>
           <div className="game-controls">
             <div className="edit-controls">

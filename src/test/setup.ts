@@ -33,7 +33,9 @@ HTMLDialogElement.prototype.close = function () {
   this.removeAttribute('open');
 };
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 9, 15, 12));
   localStorage.clear();
   Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });

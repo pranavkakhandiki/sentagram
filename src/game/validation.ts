@@ -12,10 +12,10 @@ export function sentenceLabel(token: WordToken, position: number): string {
 /** IDs establish tile integrity; visible words establish sentence correctness.
  * This accepts interchangeable duplicates without erasing meaningful capitals.
  */
-export function acceptedSentence(
+export function evaluateGuess(
   puzzle: Puzzle,
   selectedIds: readonly string[],
-): AcceptedSentence | null {
+): { correct: boolean; oneSwapAway: boolean; positions: boolean[]; sentence: AcceptedSentence } | null {
   if (
     selectedIds.length !== puzzle.solutionTokens.length ||
     new Set(selectedIds).size !== selectedIds.length
@@ -28,19 +28,24 @@ export function acceptedSentence(
     { words: puzzle.solutionTokens.map((token) => token.text), format: puzzle.format },
     ...(puzzle.alternativeSolutions ?? []),
   ];
-  return (
-    candidates.find(
-      (candidate) =>
-        candidate.words.length === chosen.length &&
-        chosen.every((token, index) => {
-          if (!token) return false;
-          const expected = candidate.words[index];
-          return token.preserveCase
-            ? token.text === expected
-            : token.text.toLocaleLowerCase('en') === expected.toLocaleLowerCase('en');
-        }),
-    ) ?? null
-  );
+  function matches(token: WordToken | undefined, expected: string) {
+    return Boolean(token && (token.preserveCase ? token.text === expected
+      : token.text.toLocaleLowerCase('en') === expected.toLocaleLowerCase('en')));
+  }
+  const ranked = candidates.map((sentence) => {
+    const positions = chosen.map((token, index) => matches(token, sentence.words[index]));
+    const wrong = positions.flatMap((right, index) => right ? [] : [index]);
+    const oneSwapAway = wrong.length === 2 &&
+      matches(chosen[wrong[0]], sentence.words[wrong[1]]) &&
+      matches(chosen[wrong[1]], sentence.words[wrong[0]]);
+    return { sentence, positions, correct: wrong.length === 0, oneSwapAway, score: chosen.length - wrong.length };
+  }).sort((a, b) => b.score - a.score);
+  return ranked[0];
+}
+
+export function acceptedSentence(puzzle: Puzzle, selectedIds: readonly string[]): AcceptedSentence | null {
+  const result = evaluateGuess(puzzle, selectedIds);
+  return result?.correct ? result.sentence : null;
 }
 
 export function formatSentence(tokens: readonly WordToken[], format: SentenceFormat): string {

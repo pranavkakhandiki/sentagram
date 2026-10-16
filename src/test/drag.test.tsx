@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { STORAGE_KEY } from '../game/storage';
-import { puzzles } from '../data/puzzles';
 
 async function arrange() {
   const user = userEvent.setup();
@@ -43,7 +42,7 @@ describe('placed-word swapping', () => {
 
   it('uses the same swap interaction for touch pointers and persists the new order', async () => {
     const { source } = await arrange();
-    const before = JSON.parse(localStorage.getItem(STORAGE_KEY)!).puzzles[puzzles[0].id]
+    const before = JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily
       .selectedIds;
     fireEvent.pointerDown(source, {
       pointerId: 7,
@@ -67,7 +66,7 @@ describe('placed-word swapping', () => {
     });
     expect(words()).toEqual(['String', 'hard', 'kite']);
     expect(
-      JSON.parse(localStorage.getItem(STORAGE_KEY)!).puzzles[puzzles[0].id].selectedIds,
+      JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily.selectedIds,
     ).toEqual([before[2], before[1], before[0]]);
   });
 

@@ -26,7 +26,6 @@ export interface Puzzle {
   solutionTokens: WordToken[];
   wordBank: WordToken[];
   format: SentenceFormat;
-  hint?: string;
   explanation: string;
   alternativeSolutions?: AcceptedSentence[];
 }
@@ -37,13 +36,15 @@ export interface PuzzleProgress {
   selectedIds: string[];
   history: string[][];
   status: PuzzleStatus;
-  attempts: number;
-  incorrectChecks: number;
-  hintUsed: boolean;
+  /** Full tile orders, captured before a failed third guess reveals the answer. */
+  guesses: string[][];
 }
 
 export interface SavedProgress {
-  version: 1;
-  activePuzzleId: string;
-  puzzles: Record<string, PuzzleProgress>;
+  version: 2;
+  day: string;
+  daily: PuzzleProgress;
+  devMode: boolean;
+  practicePuzzleId: string | null;
+  practice: Record<string, PuzzleProgress>;
 }

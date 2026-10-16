@@ -1,12 +1,21 @@
 import type { Puzzle, PuzzleProgress } from './types';
+import { dayKey, displayDate } from './daily';
+import { evaluateGuess } from './validation';
 
-export function resultText(puzzle: Puzzle, progress: PuzzleProgress): string {
+export const GAME_URL = 'https://pranavkakhandiki.github.io/sentagram/';
+
+export function guessRows(puzzle: Puzzle, progress: PuzzleProgress): string[] {
+  return progress.guesses.map((ids) => evaluateGuess(puzzle, ids)!.positions.map(
+    (correct) => correct ? '🟩' : '⬜',
+  ).join(''));
+}
+
+export function resultText(puzzle: Puzzle, progress: PuzzleProgress, day = dayKey(), practice = false): string {
   return [
-    `Sentagram #${String(puzzle.number).padStart(2, '0')}`,
-    progress.status === 'revealed'
-      ? 'Answer revealed'
-      : `Solved in ${progress.attempts} ${progress.attempts === 1 ? 'attempt' : 'attempts'}`,
-    progress.hintUsed ? 'A little hint helped' : 'No hints used',
+    practice ? `Sentagram Practice #${puzzle.number}` : `Sentagram · ${displayDate(day, true)}`,
+    `${progress.status === 'solved' ? progress.guesses.length : 'X'}/3`,
+    ...guessRows(puzzle, progress),
+    '', GAME_URL,
   ].join('\n');
 }
 

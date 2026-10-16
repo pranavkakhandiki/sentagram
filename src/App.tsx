@@ -1,184 +1,86 @@
 import { useState } from 'react';
-import { puzzles } from './data/puzzles';
-import { acceptedSentence } from './game/validation';
+import { evaluateGuess } from './game/validation';
+import { displayDate } from './game/daily';
 import { useGame } from './hooks/useGame';
 import { Header } from './components/Header';
-import { Modal } from './components/Modal';
+import { HelpDialog } from './components/HelpDialog';
 import { PuzzleBoard } from './components/PuzzleBoard';
 import { PuzzleMenu } from './components/PuzzleMenu';
 import { CompletionPanel } from './components/CompletionPanel';
 
-type Dialog = 'collection' | 'help' | 'reveal' | null;
+type Dialog = 'collection' | 'help' | null;
 
 export default function App() {
-  const { state, dispatch, puzzle, progress, saveFailed } = useGame();
+  const { state, dispatch, puzzle, progress, practice, saveFailed } = useGame();
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [feedback, setFeedback] = useState('');
-  const [checkPulse, setCheckPulse] = useState(0);
-  const [announcement, setAnnouncement] = useState('');
+  const [feedback, setFeedback] = useState({ key: '', message: '', pulse: 0 });
+  const context = practice ? 'practice-' + puzzle.id : state.day;
   const finished = progress.status !== 'playing';
-  const allDone = puzzles.every(
-    (item) => state.puzzles[item.id]?.status && state.puzzles[item.id]?.status !== 'playing',
-  );
+  const message = feedback.key === context ? feedback.message : '';
 
   function selectPuzzle(id: string) {
     dispatch({ type: 'switch', puzzleId: id });
-    setFeedback('');
-    setCheckPulse(0);
+    setFeedback({ key: '', message: '', pulse: 0 });
     setDialog(null);
-    setAnnouncement(`Puzzle ${puzzles.find((item) => item.id === id)?.number} selected.`);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
   function check() {
-    if (progress.selectedIds.length !== puzzle.solutionTokens.length) return;
-    const correct = Boolean(acceptedSentence(puzzle, progress.selectedIds));
+    if (finished) return;
+    const result = evaluateGuess(puzzle, progress.selectedIds);
+    if (!result) return;
     dispatch({ type: 'check' });
-    setCheckPulse((value) => value + 1);
-    setFeedback(correct ? '' : 'Not quite the intended sentence. Try another arrangement.');
-    setAnnouncement(
-      correct ? 'Puzzle solved!' : `Attempt ${progress.attempts + 1}. Try another arrangement.`,
-    );
-  }
-
-  function next() {
-    if (allDone) {
-      setDialog('collection');
-      return;
-    }
-    const currentIndex = puzzles.findIndex((item) => item.id === puzzle.id);
-    const ordered = [...puzzles.slice(currentIndex + 1), ...puzzles.slice(0, currentIndex + 1)];
-    const nextPuzzle = ordered.find(
-      (item) => !state.puzzles[item.id] || state.puzzles[item.id].status === 'playing',
-    );
-    if (nextPuzzle) selectPuzzle(nextPuzzle.id);
+    setFeedback({
+      key: context, pulse: feedback.pulse + 1,
+      message: result.correct || progress.guesses.length === 2 ? ''
+        : result.oneSwapAway ? 'One swap away…' : 'Not quite. Try again.',
+    });
   }
 
   return (
     <>
-      <a className="skip-link" href="#main">
-        Skip to puzzle
-      </a>
-      <Header onMenu={() => setDialog('collection')} onHelp={() => setDialog('help')} />
+      <a className="skip-link" href="#main">Skip to puzzle</a>
+      <Header devMode={state.devMode} onMenu={() => setDialog('collection')} onHelp={() => setDialog('help')} />
       <main id="main" className="game-main">
-        <article className="game-article" key={puzzle.id}>
-          <div className="puzzle-kicker">
-            <h1
-              aria-label={`Puzzle ${String(puzzle.number).padStart(2, '0')} of ${puzzles.length}`}
-            >
-              Puzzle {String(puzzle.number).padStart(2, '0')}
-            </h1>
-            <span className={`difficulty difficulty-${puzzle.difficulty.toLowerCase()}`}>
-              {puzzle.difficulty}
-            </span>
+        <article className="game-article" key={context}>
+          <div className="puzzle-heading">
+            <h1>{practice ? 'Practice · Puzzle ' + String(puzzle.number).padStart(2, '0')
+              : <time dateTime={state.day}>{displayDate(state.day)}</time>}</h1>
+            {state.devMode && <span className="dev-label">{puzzle.difficulty} · Dev mode</span>}
           </div>
+          <p className="game-instruction">Make a sentence. You have three tries.</p>
           <PuzzleBoard
-            puzzle={puzzle}
-            progress={progress}
+            puzzle={puzzle} progress={progress}
             dispatch={(action) => {
               dispatch(action);
-              if (action.type !== 'check') setFeedback('');
+              setFeedback((value) => ({ ...value, message: '' }));
             }}
-            feedback={feedback}
-            checkPulse={checkPulse}
-            onCheck={check}
+            feedback={message} checkPulse={feedback.key === context ? feedback.pulse : 0} onCheck={check}
           />
-          {finished ? (
+          {finished && (
             <CompletionPanel
-              key={`${puzzle.id}-${progress.status}`}
-              puzzle={puzzle}
-              progress={progress}
-              allDone={allDone}
-              onNext={next}
+              key={context + progress.status} puzzle={puzzle} progress={progress}
+              day={state.day} practice={practice}
               onReplay={() => {
                 dispatch({ type: 'reset' });
-                setFeedback('');
-                setAnnouncement('Puzzle reset.');
+                setFeedback({ key: '', message: '', pulse: 0 });
               }}
             />
-          ) : (
-            <div className="secondary-section">
-              <div className="secondary-actions">
-                <button
-                  className="hint-button"
-                  onClick={() => dispatch({ type: 'hint' })}
-                  disabled={progress.hintUsed || !puzzle.hint}
-                >
-                  Hint
-                </button>
-                <button className="text-button reveal-button" onClick={() => setDialog('reveal')}>
-                  Reveal
-                </button>
-              </div>
-              {progress.hintUsed && (
-                <div className="hint-panel" role="status">
-                  <p>{puzzle.hint}</p>
-                </div>
-              )}
-            </div>
           )}
+          {practice && <button className="text-button back-to-today" onClick={() => dispatch({ type: 'today' })}>Back to today’s puzzle</button>}
         </article>
-        {saveFailed && (
-          <p className="storage-notice" role="status">
-            Your browser can’t save progress right now. You can keep playing in this tab.
-          </p>
-        )}
+        {saveFailed && <p className="storage-notice" role="status">Your browser can’t save progress right now. You can keep playing in this tab.</p>}
       </main>
-      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {announcement}
-      </p>
-      {dialog === 'collection' && (
-        <PuzzleMenu state={state} onSelect={selectPuzzle} onClose={() => setDialog(null)} />
+      {dialog === 'collection' && state.devMode && (
+        <PuzzleMenu state={state} onSelect={selectPuzzle} onToday={() => {
+          dispatch({ type: 'today' });
+          setDialog(null);
+        }} onClose={() => setDialog(null)} />
       )}
       {dialog === 'help' && (
-        <Modal title="How to play" onClose={() => setDialog(null)} className="help-modal">
-          <ol className="how-to-list">
-            <li>
-              <span>01</span>
-              <p>Tap words to build a sentence. Use every tile.</p>
-            </li>
-            <li>
-              <span>02</span>
-              <p>
-                Drag a placed word onto another to swap them. Tap a word to return it to the bank.
-              </p>
-            </li>
-            <li>
-              <span>03</span>
-              <p>Look for words with more than one meaning. Check when it clicks.</p>
-            </li>
-          </ol>
-          <p className="help-note">
-            Names and months keep their capitals. We handle punctuation. With a word focused, Alt +
-            arrow keys swap it with a neighbor.
-          </p>
-          <button className="primary-button modal-primary" onClick={() => setDialog(null)}>
-            Got it
-          </button>
-        </Modal>
-      )}
-      {dialog === 'reveal' && (
-        <Modal title="Reveal the answer?" onClose={() => setDialog(null)} className="reveal-modal">
-          <p className="modal-intro">
-            This puzzle will be marked as revealed. You can replay it any time.
-          </p>
-          <div className="reveal-actions">
-            <button className="secondary-button" onClick={() => setDialog(null)}>
-              Keep playing
-            </button>
-            <button
-              className="primary-button"
-              onClick={() => {
-                dispatch({ type: 'reveal' });
-                setDialog(null);
-                setFeedback('');
-                setAnnouncement('Answer revealed.');
-              }}
-            >
-              Reveal
-            </button>
-          </div>
-        </Modal>
+        <HelpDialog enabled={state.devMode}
+          onDevChange={(enabled) => dispatch({ type: 'set-dev', enabled })}
+          onClose={() => setDialog(null)} />
       )}
     </>
   );
