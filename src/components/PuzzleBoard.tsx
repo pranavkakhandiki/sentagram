@@ -4,7 +4,7 @@ import type { Dispatch, KeyboardEvent } from 'react';
 import type { GameAction } from '../game/state';
 import type { Puzzle, PuzzleProgress } from '../game/types';
 import { acceptedSentence, bankLabel, sentenceLabel } from '../game/validation';
-import { useSentenceSwap } from '../hooks/useSentenceSwap';
+import { useSentenceReorder } from '../hooks/useSentenceReorder';
 import { WordTile } from './WordTile';
 import { MAX_GUESSES } from '../game/state';
 
@@ -28,7 +28,8 @@ export function PuzzleBoard({
   const tileElements = useRef(new Map<string, HTMLButtonElement>());
   const previousPositions = useRef(new Map<string, DOMRect>());
   const focusAfterMove = useRef<string | null>(null);
-  const [swapAnnouncement, setSwapAnnouncement] = useState('');
+  const sentenceArea = useRef<HTMLDivElement>(null);
+  const [moveAnnouncement, setMoveAnnouncement] = useState('');
   const complete = progress.selectedIds.length === puzzle.solutionTokens.length;
   const finished = progress.status !== 'playing';
   const tokenMap = new Map(puzzle.solutionTokens.map((token) => [token.id, token]));
@@ -41,20 +42,20 @@ export function PuzzleBoard({
     );
   }
 
-  function swapWords(firstId: string, secondId: string, dropPosition?: DOMRect) {
+  function reorderWord(tokenId: string, toIndex: number, dropPosition?: DOMRect) {
     rememberPositions();
     // Settle the dragged tile from the finger's location, not its old slot.
-    if (dropPosition) previousPositions.current.set(firstId, dropPosition);
-    const position = progress.selectedIds.indexOf(secondId) + 1;
-    dispatch({ type: 'swap', firstId, secondId });
-    setSwapAnnouncement(`${bankLabel(tokenMap.get(firstId)!)} swapped to position ${position}.`);
+    if (dropPosition) previousPositions.current.set(tokenId, dropPosition);
+    dispatch({ type: 'reorder', tokenId, toIndex });
+    setMoveAnnouncement(`${bankLabel(tokenMap.get(tokenId)!)} moved to position ${toIndex + 1}.`);
   }
 
-  const drag = useSentenceSwap({
+  const drag = useSentenceReorder({
     selectedIds: progress.selectedIds,
     elements: tileElements,
+    container: sentenceArea,
     disabled: finished,
-    onSwap: swapWords,
+    onReorder: reorderWord,
   });
 
   useLayoutEffect(() => {
@@ -99,26 +100,26 @@ export function PuzzleBoard({
     dispatch({ type, tokenId: id });
   }
 
-  function keyboardSwap(event: KeyboardEvent<HTMLButtonElement>, id: string) {
+  function keyboardReorder(event: KeyboardEvent<HTMLButtonElement>, id: string) {
     if (!event.altKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key))
       return;
     event.preventDefault();
     const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
-    const neighbor = progress.selectedIds[progress.selectedIds.indexOf(id) + direction];
-    if (neighbor) {
+    const toIndex = progress.selectedIds.indexOf(id) + direction;
+    if (toIndex >= 0 && toIndex < progress.selectedIds.length) {
       focusAfterMove.current = id;
-      swapWords(id, neighbor);
+      reorderWord(id, toIndex);
     }
   }
 
   return (
     <section className="puzzle-board" aria-label="Word puzzle">
       <p className="sr-only" id="sentence-help">
-        Tap a placed word to return it. Drag it onto another to swap. Or use Alt and an arrow key to
-        swap with a neighbor.
+        Tap a placed word to return it. Drag it between other words to move it. Or use Alt and an arrow key to move it one place.
       </p>
       <div
-        className={`sentence-area ${finished ? `sentence-finished sentence-${progress.status}` : ''} ${drag.preview ? 'is-swapping' : ''}`}
+        ref={sentenceArea}
+        className={`sentence-area ${finished ? `sentence-finished sentence-${progress.status}` : ''} ${drag.preview ? 'is-reordering' : ''}`}
       >
         <div className="sentence-sizer" aria-hidden="true">
           {puzzle.wordBank.map((token) => (
@@ -131,6 +132,7 @@ export function PuzzleBoard({
         <div
           key={checkPulse}
           className={`sentence-content ${feedback ? 'try-again' : ''} ${progress.status === 'solved' ? 'solved-animation' : ''}`}
+          role="group"
           aria-label="Constructed sentence"
         >
           {selected.length ? (
@@ -147,7 +149,7 @@ export function PuzzleBoard({
                     aria-describedby={finished ? undefined : 'sentence-help'}
                     placed
                     disabled={finished}
-                    className={`${drag.preview?.sourceId === token.id ? 'drag-source' : ''} ${drag.preview?.targetId === token.id ? 'swap-target' : ''}`}
+                    className={drag.preview?.sourceId === token.id ? 'drag-source' : ''}
                     onClick={(event) => {
                       if (!drag.consumeDragClick(token.id, event.detail)) move('remove', token.id);
                     }}
@@ -156,7 +158,7 @@ export function PuzzleBoard({
                     onPointerUp={drag.onPointerUp}
                     onPointerCancel={drag.cancel}
                     onLostPointerCapture={drag.cancel}
-                    onKeyDown={(event) => keyboardSwap(event, token.id)}
+                    onKeyDown={(event) => keyboardReorder(event, token.id)}
                   />
                   {format.after?.[index] && (
                     <span className="punctuation">{format.after[index]}</span>
@@ -176,7 +178,7 @@ export function PuzzleBoard({
       </div>
       {!finished && (
         <>
-          <div className="word-bank" aria-label="Word bank">
+          <div className="word-bank" role="group" aria-label="Word bank">
             {puzzle.wordBank.map((token) => {
               const used = progress.selectedIds.includes(token.id);
               return (
@@ -238,22 +240,31 @@ export function PuzzleBoard({
         </>
       )}
       <p className="sr-only" role="status">
-        {swapAnnouncement}
+        {moveAnnouncement}
       </p>
       {drag.preview &&
         createPortal(
-          <div
-            className="word-tile drag-preview"
-            aria-hidden="true"
-            style={{
-              left: drag.preview.x,
-              top: drag.preview.y,
-              width: drag.preview.width,
-              height: drag.preview.height,
-            }}
-          >
-            {drag.preview.label}
-          </div>,
+          <>
+            {drag.preview.insertion && (
+              <div className="insertion-marker" aria-hidden="true" style={{
+                left: drag.preview.insertion.x,
+                top: drag.preview.insertion.y,
+                height: drag.preview.insertion.height,
+              }} />
+            )}
+            <div
+              className="word-tile drag-preview"
+              aria-hidden="true"
+              style={{
+                left: drag.preview.x,
+                top: drag.preview.y,
+                width: drag.preview.width,
+                height: drag.preview.height,
+              }}
+            >
+              {drag.preview.label}
+            </div>
+          </>,
           document.body,
         )}
     </section>

@@ -2,12 +2,12 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { puzzles } from '../data/puzzles';
+import { puzzles, specialPuzzle } from '../data/puzzles';
 import { bankLabel } from '../game/validation';
 import { STORAGE_KEY } from '../game/storage';
 import { emptyProgress, gameReducer, initialState } from '../game/state';
 import { shareResult } from '../game/share';
-import { orderedState } from './helpers';
+import { orderedState, wrongOrders } from './helpers';
 
 async function fill(user: ReturnType<typeof userEvent.setup>, puzzle = puzzles[0]) {
   for (const token of puzzle.solutionTokens)
@@ -79,7 +79,14 @@ describe('daily game interface', () => {
     const user = userEvent.setup();
     save(orderedState(puzzles[0], puzzles[0].solutionTokens.map((token) => token.id).reverse()));
     const app = render(<App />);
-    for (let attempt = 0; attempt < 3; attempt++) await user.click(screen.getByRole('button', { name: 'Check' }));
+    for (const guess of wrongOrders()) {
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+      for (const id of guess) {
+        const token = puzzles[0].solutionTokens.find((word) => word.id === id)!;
+        await user.click(screen.getAllByRole('button', { name: 'Add ' + bankLabel(token) + ' to sentence' })[0]);
+      }
+      await user.click(screen.getByRole('button', { name: 'Check' }));
+    }
     expect(screen.getByRole('heading', { name: 'Until tomorrow.' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Check' })).not.toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Your attempts' }).children).toHaveLength(3);
@@ -209,5 +216,65 @@ describe('share transport', () => {
   it('offers manual copy when sharing and clipboard are unavailable', async () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
     expect(await shareResult('a result')).toBe('manual');
+  });
+});
+
+describe('repeat guesses and the special code', () => {
+  it('announces an already-guessed sentence without spending a try, including after reload', async () => {
+    const user = userEvent.setup();
+    save(orderedState(puzzles[0], wrongOrders()[0]));
+    const app = render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+    expect(screen.getByText('Already guessed…')).toBeInTheDocument();
+    expect(screen.getByLabelText('2 guesses remaining')).toBeInTheDocument();
+    app.unmount();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+    expect(screen.getByText('Already guessed…')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily.guesses).toHaveLength(1);
+  });
+  it('opens 4321 directly, uses pink only after solving, restores the result, and leaves 2026 working', async () => {
+    const user = userEvent.setup();
+    const app = render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Add kite to sentence' }));
+    const daily = JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily;
+    await user.click(screen.getByRole('button', { name: 'How to play' }));
+    await user.click(screen.getByRole('switch', { name: 'Dev mode' }));
+    await user.type(screen.getByLabelText('Dev code'), '4321');
+    await user.click(screen.getByRole('button', { name: 'Unlock' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('Word bank')).getAllByRole('button')).toHaveLength(5);
+    expect(screen.queryByRole('button', { name: 'Open puzzle collection' })).not.toBeInTheDocument();
+    expect(screen.getByRole('article')).toHaveClass('puzzle-pink');
+    expect(document.querySelector('.sentence-solved')).toBeNull();
+    await fill(user, specialPuzzle);
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+    expect(screen.getByRole('heading', { name: 'Perfect!' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Constructed sentence')).getAllByRole('button').map((word) => word.textContent))
+      .toEqual(['Will', 'you', 'be', 'my', 'girlfriend']);
+    expect(document.querySelector('.puzzle-pink .sentence-solved')).not.toBeNull();
+    expect(screen.getByText('?')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily).toEqual(daily);
+    await user.click(screen.getByRole('button', { name: 'Share' }));
+    expect(await navigator.clipboard.readText()).toContain('Sentagram ♡\n1/3\n' + '🩷'.repeat(5));
+    app.unmount();
+    render(<App />);
+    expect(document.querySelector('.puzzle-pink .sentence-solved')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Back to today’s puzzle' }));
+    expect(screen.getByRole('button', { name: 'Return kite to word bank, word 1' })).toBeInTheDocument();
+    expect(screen.getByRole('article')).not.toHaveClass('puzzle-pink');
+    await unlock(user);
+    await user.click(screen.getByRole('button', { name: 'Open puzzle collection' }));
+    expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Puzzle \d/ })).toHaveLength(20);
+    expect(screen.queryByText('One Little Question')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close dialog' }));
+    await user.click(screen.getByRole('button', { name: 'How to play' }));
+    // Either code can also be entered while dev mode is already enabled.
+    await user.type(screen.getByLabelText('Dev code'), '4321');
+    await user.click(screen.getByRole('button', { name: 'Unlock' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('Word bank')).getAllByRole('button')).toHaveLength(5);
+    expect(screen.getByLabelText('3 guesses remaining')).toBeInTheDocument();
   });
 });

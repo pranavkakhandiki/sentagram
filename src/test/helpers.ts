@@ -20,3 +20,8 @@ export function orderedState(puzzle = puzzles[0], ids = puzzle.solutionTokens.ma
   return puzzle.id === puzzles[0].id ? { ...state, daily: progress }
     : { ...state, devMode: true, practicePuzzleId: puzzle.id, practice: { [puzzle.id]: progress } };
 }
+
+export function wrongOrders(puzzle = puzzles[0]) {
+  const backwards = puzzle.solutionTokens.map((token) => token.id).reverse();
+  return [0, 1, 2].map((offset) => [...backwards.slice(offset), ...backwards.slice(0, offset)]);
+}

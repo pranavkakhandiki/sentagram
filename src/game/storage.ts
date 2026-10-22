@@ -1,4 +1,4 @@
-import { puzzleById, puzzles } from '../data/puzzles';
+import { puzzleById, puzzles, specialPuzzle } from '../data/puzzles';
 import { dailyPuzzle, dayKey, validDay } from './daily';
 import { acceptedSentence } from './validation';
 import { emptyProgress, initialState, MAX_GUESSES } from './state';
@@ -59,6 +59,8 @@ export function sanitizeProgress(raw: unknown, today = dayKey()): SavedProgress 
   const devMode = raw.devMode === true;
   return {
     ...fallback, practice, devMode,
+    specialActive: raw.specialActive === true,
+    special: sanitizePuzzle(raw.special, specialPuzzle),
     daily: validDay(raw.day) && raw.day === today ? sanitizePuzzle(raw.daily, dailyPuzzle(today)) : emptyProgress(),
     practicePuzzleId: devMode && typeof raw.practicePuzzleId === 'string' && puzzleById.has(raw.practicePuzzleId)
       ? raw.practicePuzzleId : null,

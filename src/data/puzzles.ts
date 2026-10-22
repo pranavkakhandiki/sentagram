@@ -204,4 +204,17 @@ export const puzzles: Puzzle[] = [
   }),
 ];
 
+// Separate from the daily cycle and development collection.
+export const specialPuzzle: Puzzle = {
+  ...definePuzzle({
+    id: 'one-little-question',
+    number: 0,
+    title: 'One Little Question',
+    difficulty: 'Gentle',
+    solution: 'Will you be my girlfriend?',
+    explanation: '',
+  }),
+  theme: 'pink',
+};
+
 export const puzzleById = new Map(puzzles.map((puzzle) => [puzzle.id, puzzle]));

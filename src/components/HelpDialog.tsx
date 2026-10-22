@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
 
-export function HelpDialog({ enabled, onDevChange, onClose }: {
-  enabled: boolean; onDevChange: (enabled: boolean) => void; onClose: () => void;
+export function HelpDialog({ enabled, onDevChange, onSpecial, onClose }: {
+  enabled: boolean; onDevChange: (enabled: boolean) => void; onSpecial: () => void; onClose: () => void;
 }) {
   const [wantsCode, setWantsCode] = useState(enabled);
   const [code, setCode] = useState('');
@@ -12,11 +12,11 @@ export function HelpDialog({ enabled, onDevChange, onClose }: {
       <p className="help-lede">One sentence. Three chances.</p>
       <ol className="how-to-list">
         <li>Tap the words to build the intended sentence. Use every tile.</li>
-        <li>Drag a placed word onto another to swap them. Tap to send it back.</li>
-        <li>Press Check to use a guess. “One swap away” means exchanging just two words would solve it.</li>
+        <li>Drag a placed word between other words to move it. Tap to send it back.</li>
+        <li>Press Check to use a guess. You can’t submit the same sentence twice. “One swap away” means exchanging just two words would solve it.</li>
       </ol>
       <p className="help-note">After three misses, we reveal the answer. A new puzzle arrives at midnight, your local time.</p>
-      <p className="help-note keyboard-note">Names keep their capitals; punctuation is provided. You can also swap a focused word with Alt + arrow keys.</p>
+      <p className="help-note keyboard-note">Names keep their capitals; punctuation is provided. You can also move a focused word with Alt + arrow keys.</p>
       <div className="dev-settings">
         <label className="dev-toggle">
           <span>Dev mode</span>
@@ -29,10 +29,11 @@ export function HelpDialog({ enabled, onDevChange, onClose }: {
               if (!checked) onDevChange(false);
             }} />
         </label>
-        {wantsCode && !enabled && (
+        {wantsCode && (
           <form className="dev-form" onSubmit={(event) => {
             event.preventDefault();
-            if (code === '2026') { onDevChange(true); setError(''); }
+            if (code === '4321') { onSpecial(); }
+            else if (code === '2026') { onDevChange(true); setError(''); }
             else setError('That code doesn’t match. Try again.');
           }}>
             <label htmlFor="dev-code">Dev code</label>

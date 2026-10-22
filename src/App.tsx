@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { evaluateGuess } from './game/validation';
+import { evaluateGuess, hasGuessed } from './game/validation';
 import { displayDate } from './game/daily';
 import { useGame } from './hooks/useGame';
 import { Header } from './components/Header';
@@ -11,10 +11,10 @@ import { CompletionPanel } from './components/CompletionPanel';
 type Dialog = 'collection' | 'help' | null;
 
 export default function App() {
-  const { state, dispatch, puzzle, progress, practice, saveFailed } = useGame();
+  const { state, dispatch, puzzle, progress, practice, special, saveFailed } = useGame();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [feedback, setFeedback] = useState({ key: '', message: '', pulse: 0 });
-  const context = practice ? 'practice-' + puzzle.id : state.day;
+  const context = special ? puzzle.id : practice ? 'practice-' + puzzle.id : state.day;
   const finished = progress.status !== 'playing';
   const message = feedback.key === context ? feedback.message : '';
 
@@ -29,6 +29,10 @@ export default function App() {
     if (finished) return;
     const result = evaluateGuess(puzzle, progress.selectedIds);
     if (!result) return;
+    if (hasGuessed(puzzle, progress.guesses, progress.selectedIds)) {
+      setFeedback({ key: context, pulse: feedback.pulse + 1, message: 'Already guessed…' });
+      return;
+    }
     dispatch({ type: 'check' });
     setFeedback({
       key: context, pulse: feedback.pulse + 1,
@@ -42,7 +46,7 @@ export default function App() {
       <a className="skip-link" href="#main">Skip to puzzle</a>
       <Header devMode={state.devMode} onMenu={() => setDialog('collection')} onHelp={() => setDialog('help')} />
       <main id="main" className="game-main">
-        <article className="game-article" key={context}>
+        <article className={`game-article ${puzzle.theme === 'pink' ? 'puzzle-pink' : ''}`} key={context}>
           <div className="puzzle-heading">
             <h1>{practice ? 'Practice · Puzzle ' + String(puzzle.number).padStart(2, '0')
               : <time dateTime={state.day}>{displayDate(state.day)}</time>}</h1>
@@ -67,7 +71,7 @@ export default function App() {
               }}
             />
           )}
-          {practice && <button className="text-button back-to-today" onClick={() => dispatch({ type: 'today' })}>Back to today’s puzzle</button>}
+          {(practice || special) && <button className="text-button back-to-today" onClick={() => dispatch({ type: 'today' })}>Back to today’s puzzle</button>}
         </article>
         {saveFailed && <p className="storage-notice" role="status">Your browser can’t save progress right now. You can keep playing in this tab.</p>}
       </main>
@@ -80,6 +84,12 @@ export default function App() {
       {dialog === 'help' && (
         <HelpDialog enabled={state.devMode}
           onDevChange={(enabled) => dispatch({ type: 'set-dev', enabled })}
+          onSpecial={() => {
+            dispatch({ type: 'start-special' });
+            setFeedback({ key: '', message: '', pulse: 0 });
+            setDialog(null);
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }}
           onClose={() => setDialog(null)} />
       )}
     </>

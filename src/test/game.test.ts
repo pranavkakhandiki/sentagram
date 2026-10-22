@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseSentence, puzzles } from '../data/puzzles';
+import { parseSentence, puzzles, specialPuzzle } from '../data/puzzles';
 import { deterministicShuffle } from '../game/shuffle';
 import { emptyProgress, gameReducer, initialState, activeGame } from '../game/state';
 import { localProgressRepository, sanitizeProgress, STORAGE_KEY } from '../game/storage';
-import { acceptedSentence, bankLabel, evaluateGuess, formatSentence, sentenceLabel } from '../game/validation';
+import { acceptedSentence, bankLabel, evaluateGuess, formatSentence, sentenceLabel, hasGuessed } from '../game/validation';
 import { guessRows, resultText, GAME_URL } from '../game/share';
 import { dailyPuzzle, dayKey, displayDate, LAUNCH_DAY, millisecondsToMidnight, validDay } from '../game/daily';
-import { idsForWords, orderedState } from './helpers';
+import { idsForWords, orderedState, wrongOrders } from './helpers';
 
 describe('curated puzzle integrity', () => {
   it('has 20 unique puzzles with consecutive editorial numbers', () => {
@@ -131,11 +131,12 @@ describe('three guesses and one-swap feedback', () => {
   it('ignores incomplete checks; saves failed arrangements and reveals on precisely the third miss', () => {
     const partial = orderedState(puzzle, ids.slice(0, 2));
     expect(gameReducer(partial, { type: 'check' })).toBe(partial);
-    const wrong = [...ids].reverse();
-    let state = orderedState(puzzle, wrong);
+    const guesses = wrongOrders(puzzle);
+    let state = orderedState(puzzle, guesses[0]);
     for (let attempt = 1; attempt <= 3; attempt++) {
+      state = { ...state, daily: { ...state.daily, selectedIds: guesses[attempt - 1] } };
       state = gameReducer(state, { type: 'check' });
-      expect(state.daily.guesses).toEqual(Array.from({ length: attempt }, () => wrong));
+      expect(state.daily.guesses).toEqual(guesses.slice(0, attempt));
       expect(state.daily.status).toBe(attempt === 3 ? 'revealed' : 'playing');
     }
     expect(state.daily.selectedIds).toEqual(ids);
@@ -143,13 +144,14 @@ describe('three guesses and one-swap feedback', () => {
       expect(gameReducer(state, { type })).toBe(state);
   });
   it('can solve on the third guess and never changes earlier recorded guesses', () => {
-    const wrong = [...ids].reverse();
-    let state = orderedState(puzzle, wrong);
-    state = gameReducer(gameReducer(state, { type: 'check' }), { type: 'check' });
+    const [wrong, second] = wrongOrders(puzzle);
+    let state = gameReducer(orderedState(puzzle, wrong), { type: 'check' });
+    state = { ...state, daily: { ...state.daily, selectedIds: second } };
+    state = gameReducer(state, { type: 'check' });
     state = { ...state, daily: { ...state.daily, selectedIds: ids } };
     state = gameReducer(state, { type: 'check' });
     expect(state.daily.status).toBe('solved');
-    expect(state.daily.guesses).toEqual([wrong, wrong, ids]);
+    expect(state.daily.guesses).toEqual([wrong, second, ids]);
     expect(gameReducer(state, { type: 'remove', tokenId: ids[0] })).toBe(state);
   });
 });
@@ -159,7 +161,7 @@ describe('editing and isolated development play', () => {
   it('adds distinct duplicates, removes a middle tile, clears, and undoes edits without refunding guesses', () => {
     let state = initialState(LAUNCH_DAY);
     for (const tokenId of ids) state = gameReducer(state, { type: 'add', tokenId });
-    state = gameReducer(state, { type: 'swap', firstId: ids[0], secondId: ids[9] });
+    state = gameReducer(state, { type: 'reorder', tokenId: ids[0], toIndex: 9 });
     state = gameReducer(state, { type: 'check' });
     state = gameReducer(state, { type: 'undo' });
     expect(state.daily.selectedIds).toEqual(ids);
@@ -172,13 +174,13 @@ describe('editing and isolated development play', () => {
     expect(state.daily.selectedIds).toEqual([]);
     expect(gameReducer(state, { type: 'undo' }).daily.selectedIds).toEqual(ids);
   });
-  it('ignores duplicate additions, foreign IDs, and invalid swaps', () => {
+  it('ignores duplicate additions, foreign IDs, and invalid insertions', () => {
     const state = orderedState(puzzle, ids.slice(0, 2));
     for (const action of [
       { type: 'add', tokenId: ids[0] }, { type: 'add', tokenId: 'unknown' },
       { type: 'remove', tokenId: ids[4] },
-      { type: 'swap', firstId: ids[0], secondId: ids[0] },
-      { type: 'swap', firstId: ids[0], secondId: ids[5] },
+      { type: 'reorder', tokenId: ids[0], toIndex: 0 },
+      { type: 'reorder', tokenId: ids[0], toIndex: 5 },
     ] as const) expect(gameReducer(state, action)).toBe(state);
   });
   it('gates bank access, isolates practice on today’s exact puzzle, and permits only practice resets', () => {
@@ -216,7 +218,10 @@ describe('daily persistence', () => {
     const solved = gameReducer(orderedState(), { type: 'check' });
     expect(sanitizeProgress(solved, LAUNCH_DAY)).toEqual(solved);
     let lost = orderedState(puzzles[0], puzzles[0].solutionTokens.map((token) => token.id).reverse());
-    for (let i = 0; i < 3; i++) lost = gameReducer(lost, { type: 'check' });
+    for (const guess of wrongOrders()) {
+      lost = { ...lost, daily: { ...lost.daily, selectedIds: guess } };
+      lost = gameReducer(lost, { type: 'check' });
+    }
     expect(sanitizeProgress(lost, LAUNCH_DAY)).toEqual(lost);
   });
   it('discards forged results and malformed tile IDs and stops reading after the first solved guess', () => {
@@ -254,11 +259,93 @@ describe('spoiler-free emoji results', () => {
   it('shares X/3 and all three failed guesses rather than a fabricated green reveal row', () => {
     const puzzle = puzzles[0], wrong = puzzle.solutionTokens.map((token) => token.id).reverse();
     let state = orderedState(puzzle, wrong);
-    for (let i = 0; i < 3; i++) state = gameReducer(state, { type: 'check' });
+    for (const guess of wrongOrders(puzzle)) {
+      state = { ...state, daily: { ...state.daily, selectedIds: guess } };
+      state = gameReducer(state, { type: 'check' });
+    }
     const text = resultText(puzzle, state.daily, LAUNCH_DAY);
     expect(text).toContain('\nX/3\n');
     expect(guessRows(puzzle, state.daily)).toHaveLength(3);
     expect(guessRows(puzzle, state.daily).every((row) => row.includes('⬜'))).toBe(true);
     expect(resultText(puzzle, state.daily, LAUNCH_DAY, true)).toContain('Practice #1');
+  });
+});
+
+describe('insertion and duplicate guesses', () => {
+  const puzzle = puzzles[0], ids = puzzle.solutionTokens.map((token) => token.id);
+  it('inserts at any final position without exchanging the target or intervening words', () => {
+    const state = orderedState(puzzle, ids.slice(0, 5));
+    const moved = gameReducer(state, { type: 'reorder', tokenId: ids[0], toIndex: 3 });
+    expect(moved.daily.selectedIds).toEqual([ids[1], ids[2], ids[3], ids[0], ids[4]]);
+    expect(gameReducer(moved, { type: 'undo' }).daily.selectedIds).toEqual(ids.slice(0, 5));
+    const back = gameReducer(state, { type: 'reorder', tokenId: ids[4], toIndex: 0 });
+    expect(back.daily.selectedIds).toEqual([ids[4], ...ids.slice(0, 4)]);
+    expect(back.daily.guesses).toEqual([]);
+  });
+  it('ignores invalid insertion positions and unknown tiles', () => {
+    const state = orderedState(puzzle);
+    for (const toIndex of [-1, ids.length, 1.5, NaN, Infinity, 0])
+      expect(gameReducer(state, { type: 'reorder', tokenId: ids[0], toIndex })).toBe(state);
+    expect(gameReducer(state, { type: 'reorder', tokenId: 'foreign', toIndex: 1 })).toBe(state);
+  });
+  it('refuses the same guess again even after exchanging identical word IDs, Undo, or reload', () => {
+    const wrong = [...ids].reverse();
+    let state = gameReducer(orderedState(puzzle, wrong), { type: 'check' });
+    expect(gameReducer(state, { type: 'check' })).toBe(state);
+    const duplicates = [...wrong];
+    const firstWind = duplicates.indexOf(ids[1]), otherWind = duplicates.indexOf(ids[6]);
+    [duplicates[firstWind], duplicates[otherWind]] = [duplicates[otherWind], duplicates[firstWind]];
+    expect(hasGuessed(puzzle, state.daily.guesses, duplicates)).toBe(true);
+    state = { ...state, daily: { ...state.daily, selectedIds: duplicates } };
+    expect(gameReducer(state, { type: 'check' })).toBe(state);
+    expect(state.daily.guesses).toHaveLength(1);
+    localProgressRepository.save(state);
+    const restored = localProgressRepository.load();
+    expect(gameReducer(restored, { type: 'check' })).toBe(restored);
+    expect(hasGuessed(puzzle, state.daily.guesses, ids)).toBe(false);
+    expect(hasGuessed(puzzle, state.daily.guesses, ids.slice(0, 3))).toBe(false);
+  });
+  it('distinguishes meaningful capitals when comparing repeated words', () => {
+    const monthPuzzle = puzzles[5], monthIds = monthPuzzle.solutionTokens.map((token) => token.id);
+    const swapped = [...monthIds]; [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+    expect(hasGuessed(monthPuzzle, [monthIds], swapped)).toBe(false);
+  });
+});
+
+describe('code-only special puzzle', () => {
+  it('is scrambled, has the exact question, and stays outside the 20-puzzle collection', () => {
+    expect(puzzles).toHaveLength(20);
+    expect(puzzles).not.toContain(specialPuzzle);
+    expect(formatSentence(specialPuzzle.solutionTokens, specialPuzzle.format)).toBe('Will you be my girlfriend?');
+    expect(specialPuzzle.wordBank).not.toEqual(specialPuzzle.solutionTokens);
+    expect(specialPuzzle.theme).toBe('pink');
+  });
+  it('has independent progress that survives reload and midnight without affecting the daily game', () => {
+    const dailyState = gameReducer(orderedState(puzzles[0], wrongOrders()[0]), { type: 'check' });
+    let state = gameReducer(dailyState, { type: 'start-special' });
+    expect(state.devMode).toBe(false);
+    expect(activeGame(state).puzzle).toBe(specialPuzzle);
+    for (const token of specialPuzzle.solutionTokens) state = gameReducer(state, { type: 'add', tokenId: token.id });
+    state = gameReducer(state, { type: 'check' });
+    expect(state.special.status).toBe('solved');
+    expect(state.daily).toBe(dailyState.daily);
+    localProgressRepository.save(state);
+    expect(localProgressRepository.load()).toEqual(state);
+    const next = gameReducer(state, { type: 'rollover', day: '2026-10-16' });
+    expect(activeGame(next).puzzle).toBe(specialPuzzle);
+    expect(next.special).toBe(state.special);
+    expect(next.daily).toEqual(emptyProgress());
+    expect(activeGame(gameReducer(state, { type: 'today' })).progress).toBe(dailyState.daily);
+    const dev = gameReducer(state, { type: 'set-dev', enabled: true });
+    expect(dev.devMode).toBe(true);
+    expect(dev.specialActive).toBe(false);
+    expect(gameReducer(state, { type: 'start-special' }).special).toEqual(emptyProgress());
+  });
+  it('loads existing version 2 saves without losing daily guesses', () => {
+    const state = gameReducer(orderedState(puzzles[0], wrongOrders()[0]), { type: 'check' });
+    const { special, specialActive, ...older } = state;
+    expect(sanitizeProgress(older, LAUNCH_DAY)).toEqual({ ...older, special: emptyProgress(), specialActive: false });
+    expect(special).toEqual(emptyProgress());
+    expect(specialActive).toBe(false);
   });
 });

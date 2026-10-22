@@ -37,7 +37,7 @@ export function CompletionPanel({ puzzle, progress, day, practice, onReplay }: {
           </div>;
         })}
       </div>
-      <p className="completion-explanation">{puzzle.explanation}</p>
+      {puzzle.explanation && <p className="completion-explanation">{puzzle.explanation}</p>}
       <button className="primary-button share-button" onClick={share} disabled={sharing}>
         {sharing ? 'Sharing…' : 'Share'}<Icon name="share" size={18} />
       </button>
@@ -47,7 +47,7 @@ export function CompletionPanel({ puzzle, progress, day, practice, onReplay }: {
         <textarea id="result-copy" readOnly value={text} onFocus={(event) => event.target.select()} rows={7} />
       </div>}
       {practice ? <button className="text-button replay-button" onClick={onReplay}><Icon name="replay" size={15} />Replay practice</button>
-        : <p className="next-puzzle-note">Back tomorrow for a new sentence.</p>}
+        : puzzle.theme !== 'pink' && <p className="next-puzzle-note">Back tomorrow for a new sentence.</p>}
     </section>
   );
 }

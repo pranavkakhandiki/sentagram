@@ -147,7 +147,11 @@ h1, h2, h3, p { margin: 0; }
 }
 .bank-slot { display: inline-flex; }
 .drag-source { opacity: .25; }
-.word-tile.swap-target { background: var(--green); border-color: var(--ink); }
+.insertion-marker {
+  position: fixed; z-index: 101; width: 3px;
+  background: var(--ink); border-radius: 2px; pointer-events: none;
+  box-shadow: 0 0 0 2px #fff;
+}
 .drag-preview {
   position: fixed; z-index: 100; pointer-events: none; margin: 0;
   background: var(--purple); border-color: var(--ink);
@@ -192,6 +196,9 @@ h1, h2, h3, p { margin: 0; }
 
 .sentence-solved { background: #f0f5e9; border-color: #92ad6e; }
 .sentence-solved .placed-tile { background: var(--green); }
+.puzzle-pink .sentence-solved { background: #fff1f5; border-color: #d58ba4; }
+.puzzle-pink .sentence-solved .placed-tile { background: #f4b5ce; }
+.puzzle-pink .result-cell.is-correct { background: #df7ca4; }
 .sentence-revealed .placed-tile { background: #e3e2da; }
 .completion-panel { text-align: center; padding-top: 25px; }
 .completion-panel h2 {
@@ -273,7 +280,6 @@ h1, h2, h3, p { margin: 0; }
   .icon-button:hover, .collection-button:hover { background: #efefeb; }
   .word-tile:not(:disabled):hover { background: #e9cb64; }
   .placed-tile:not(:disabled):hover { background: #c4b2dc; }
-  .word-tile.swap-target:hover { background: var(--green); border-color: var(--ink); }
   .primary-button:not(:disabled):hover { background: #383838; }
   .secondary-button:hover, .edit-controls .text-button:not(:disabled):hover { background: #f3f3ef; }
   .puzzle-entry:hover { background: #f4f0f8; }

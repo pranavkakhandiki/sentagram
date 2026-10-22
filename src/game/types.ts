@@ -28,6 +28,7 @@ export interface Puzzle {
   format: SentenceFormat;
   explanation: string;
   alternativeSolutions?: AcceptedSentence[];
+  theme?: 'pink';
 }
 
 export type PuzzleStatus = 'playing' | 'solved' | 'revealed';
@@ -47,4 +48,6 @@ export interface SavedProgress {
   devMode: boolean;
   practicePuzzleId: string | null;
   practice: Record<string, PuzzleProgress>;
+  specialActive: boolean;
+  special: PuzzleProgress;
 }

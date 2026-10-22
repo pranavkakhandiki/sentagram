@@ -48,6 +48,17 @@ export function acceptedSentence(puzzle: Puzzle, selectedIds: readonly string[])
   return result?.correct ? result.sentence : null;
 }
 
+/** Compare visible word orders, including interchangeable copies of repeated words. */
+export function hasGuessed(puzzle: Puzzle, guesses: readonly string[][], selectedIds: readonly string[]): boolean {
+  const tokens = new Map(puzzle.solutionTokens.map((token) => [token.id, token]));
+  function signature(ids: readonly string[]): string | null {
+    if (ids.length !== tokens.size || new Set(ids).size !== ids.length || ids.some((id) => !tokens.has(id))) return null;
+    return JSON.stringify(ids.map((id) => bankLabel(tokens.get(id)!)));
+  }
+  const current = signature(selectedIds);
+  return current !== null && guesses.some((ids) => signature(ids) === current);
+}
+
 export function formatSentence(tokens: readonly WordToken[], format: SentenceFormat): string {
   return (
     tokens

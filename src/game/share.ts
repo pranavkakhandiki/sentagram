@@ -6,13 +6,13 @@ export const GAME_URL = 'https://pranavkakhandiki.github.io/sentagram/';
 
 export function guessRows(puzzle: Puzzle, progress: PuzzleProgress): string[] {
   return progress.guesses.map((ids) => evaluateGuess(puzzle, ids)!.positions.map(
-    (correct) => correct ? '🟩' : '⬜',
+    (correct) => correct ? (puzzle.theme === 'pink' ? '🩷' : '🟩') : '⬜',
   ).join(''));
 }
 
 export function resultText(puzzle: Puzzle, progress: PuzzleProgress, day = dayKey(), practice = false): string {
   return [
-    practice ? `Sentagram Practice #${puzzle.number}` : `Sentagram · ${displayDate(day, true)}`,
+    puzzle.theme === 'pink' ? 'Sentagram ♡' : practice ? `Sentagram Practice #${puzzle.number}` : `Sentagram · ${displayDate(day, true)}`,
     `${progress.status === 'solved' ? progress.guesses.length : 'X'}/3`,
     ...guessRows(puzzle, progress),
     '', GAME_URL,
