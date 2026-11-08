@@ -114,7 +114,7 @@ describe('daily game interface', () => {
     await user.click(screen.getByRole('button', { name: 'Unlock' }));
     await user.click(screen.getByRole('button', { name: 'Let’s play' }));
     await user.click(screen.getByRole('button', { name: 'Open puzzle collection' }));
-    expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Puzzle \d/ })).toHaveLength(20);
+    expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Puzzle \d/ })).toHaveLength(50);
     await user.click(screen.getByRole('button', { name: 'Puzzle 01, Gentle, Not played' }));
     expect(screen.getByRole('heading', { name: 'Practice · Puzzle 01' })).toBeInTheDocument();
     await fill(user);
@@ -266,7 +266,7 @@ describe('repeat guesses and the special code', () => {
     expect(screen.getByRole('article')).not.toHaveClass('puzzle-pink');
     await unlock(user);
     await user.click(screen.getByRole('button', { name: 'Open puzzle collection' }));
-    expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Puzzle \d/ })).toHaveLength(20);
+    expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Puzzle \d/ })).toHaveLength(50);
     expect(screen.queryByText('One Little Question')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close dialog' }));
     await user.click(screen.getByRole('button', { name: 'How to play' }));

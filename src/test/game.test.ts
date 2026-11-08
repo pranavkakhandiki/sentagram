@@ -5,14 +5,17 @@ import { emptyProgress, gameReducer, initialState, activeGame } from '../game/st
 import { localProgressRepository, sanitizeProgress, STORAGE_KEY } from '../game/storage';
 import { acceptedSentence, bankLabel, evaluateGuess, formatSentence, sentenceLabel, hasGuessed } from '../game/validation';
 import { guessRows, resultText, GAME_URL } from '../game/share';
-import { dailyPuzzle, dayKey, displayDate, LAUNCH_DAY, millisecondsToMidnight, validDay } from '../game/daily';
+import { dailyPuzzle, dayKey, displayDate, LAUNCH_DAY, EXPANDED_CYCLE_DAY, millisecondsToMidnight, validDay } from '../game/daily';
 import { idsForWords, orderedState, wrongOrders } from './helpers';
 
 describe('curated puzzle integrity', () => {
-  it('has 20 unique puzzles with consecutive editorial numbers', () => {
-    expect(puzzles).toHaveLength(20);
-    expect(new Set(puzzles.map((puzzle) => puzzle.id)).size).toBe(20);
-    expect(puzzles.map((puzzle) => puzzle.number)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+  it('has 50 unique puzzles with consecutive editorial numbers', () => {
+    expect(puzzles).toHaveLength(50);
+    expect(new Set(puzzles.map((puzzle) => puzzle.id)).size).toBe(50);
+    expect(puzzles.map((puzzle) => puzzle.number)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+    expect(new Set(puzzles.map((puzzle) => puzzle.solutionTokens.map(bankLabel).sort().join('|'))).size).toBe(50);
+    expect(puzzles.some((puzzle) => ['two-busy-months', 'flying-fruit'].includes(puzzle.id))).toBe(false);
+    expect(puzzles.slice(20).every((puzzle) => puzzle.difficulty !== 'Gentle')).toBe(true);
   });
   for (const puzzle of puzzles) {
     it(puzzle.title + ': every tile is preserved in a deterministic scramble and the answer is accepted', () => {
@@ -49,7 +52,8 @@ describe('curated puzzle integrity', () => {
   it('retains names and months while hiding ordinary sentence-initial capitals', () => {
     expect(bankLabel(puzzles[0].solutionTokens[0])).toBe('the');
     expect(sentenceLabel(puzzles[0].solutionTokens[7], 0)).toBe('The');
-    expect(puzzles[5].solutionTokens.slice(0, 5).map(bankLabel)).toEqual(['May', 'may', 'march', 'in', 'March']);
+    expect(bankLabel(puzzles[2].solutionTokens[0])).toBe('Rose');
+    expect(bankLabel(puzzles[2].solutionTokens[1])).toBe('rose');
   });
   it('keeps punctuation outside words and retains apostrophes', () => {
     expect(parseSentence('Before lunch, Rose can’t dance.')).toEqual({
@@ -70,12 +74,14 @@ describe('daily calendar', () => {
     expect(dailyPuzzle(dayKey(new Date(2026, 9, 16)))).toBe(puzzles[1]);
     expect(displayDate(LAUNCH_DAY)).toBe('15 October 2026');
   });
-  it('loops every 20 calendar days across months, leap days, and DST', () => {
-    for (const day of ['2026-10-15', '2026-10-31', '2026-11-01', '2027-03-14', '2028-02-28']) {
+  it('keeps the published schedule today, then cycles all fifty entries through leap days and DST', () => {
+    expect(dailyPuzzle('2026-11-08')).toBe(puzzles[4]);
+    expect(dailyPuzzle(EXPANDED_CYCLE_DAY)).toBe(puzzles[20]);
+    for (const day of ['2026-11-09', '2026-12-31', '2027-03-14', '2028-02-28']) {
       const [year, month, date] = day.split('-').map(Number);
-      const cycle = new Date(year, month - 1, date + 20);
-      expect(dailyPuzzle(dayKey(cycle))).toBe(dailyPuzzle(day));
+      expect(dailyPuzzle(dayKey(new Date(year, month - 1, date + 50)))).toBe(dailyPuzzle(day));
     }
+    expect(new Set(Array.from({ length: 50 }, (_, i) => dailyPuzzle(dayKey(new Date(2026, 10, 9 + i))).id)).size).toBe(50);
     expect(dailyPuzzle('2026-10-14')).toBe(puzzles[19]);
   });
   it('schedules the next actual local midnight, rather than a fixed 24-hour wait', () => {
@@ -124,9 +130,9 @@ describe('three guesses and one-swap feedback', () => {
     const alternative = idsForWords(alternativePuzzle, alternativePuzzle.alternativeSolutions![0].words);
     [alternative[0], alternative[alternative.length - 1]] = [alternative[alternative.length - 1], alternative[0]];
     expect(evaluateGuess(alternativePuzzle, alternative)).toMatchObject({ correct: false, oneSwapAway: true });
-    const monthIds = puzzles[5].solutionTokens.map((token) => token.id);
+    const monthIds = puzzles[2].solutionTokens.map((token) => token.id);
     [monthIds[0], monthIds[1]] = [monthIds[1], monthIds[0]];
-    expect(acceptedSentence(puzzles[5], monthIds)).toBeNull();
+    expect(acceptedSentence(puzzles[2], monthIds)).toBeNull();
   });
   it('ignores incomplete checks; saves failed arrangements and reveals on precisely the third miss', () => {
     const partial = orderedState(puzzle, ids.slice(0, 2));
@@ -306,15 +312,15 @@ describe('insertion and duplicate guesses', () => {
     expect(hasGuessed(puzzle, state.daily.guesses, ids.slice(0, 3))).toBe(false);
   });
   it('distinguishes meaningful capitals when comparing repeated words', () => {
-    const monthPuzzle = puzzles[5], monthIds = monthPuzzle.solutionTokens.map((token) => token.id);
+    const monthPuzzle = puzzles[2], monthIds = monthPuzzle.solutionTokens.map((token) => token.id);
     const swapped = [...monthIds]; [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
     expect(hasGuessed(monthPuzzle, [monthIds], swapped)).toBe(false);
   });
 });
 
 describe('code-only special puzzle', () => {
-  it('is scrambled, has the exact question, and stays outside the 20-puzzle collection', () => {
-    expect(puzzles).toHaveLength(20);
+  it('is scrambled, has the exact question, and stays outside the 50-puzzle collection', () => {
+    expect(puzzles).toHaveLength(50);
     expect(puzzles).not.toContain(specialPuzzle);
     expect(formatSentence(specialPuzzle.solutionTokens, specialPuzzle.format)).toBe('Will you be my girlfriend?');
     expect(specialPuzzle.wordBank).not.toEqual(specialPuzzle.solutionTokens);

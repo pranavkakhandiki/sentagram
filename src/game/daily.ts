@@ -1,6 +1,7 @@
 import { puzzles } from '../data/puzzles';
 
 export const LAUNCH_DAY = '2026-10-15';
+export const EXPANDED_CYCLE_DAY = '2026-11-09';
 const DAY_MS = 86_400_000;
 
 /** Calendar components keep the cycle stable through 23- and 25-hour DST days. */
@@ -20,7 +21,13 @@ export function validDay(day: unknown): day is string {
 }
 
 export function dailyPuzzle(day: string) {
-  const offset = ordinal(day) - ordinal(LAUNCH_DAY);
+  // Keep the published 20-day schedule through Nov 8. Tomorrow starts the new
+  // material, then all fifty entries participate in a repeating 50-day cycle.
+  if (day < EXPANDED_CYCLE_DAY) {
+    const offset = ordinal(day) - ordinal(LAUNCH_DAY);
+    return puzzles[((offset % 20) + 20) % 20];
+  }
+  const offset = 20 + ordinal(day) - ordinal(EXPANDED_CYCLE_DAY);
   return puzzles[((offset % puzzles.length) + puzzles.length) % puzzles.length];
 }
 
