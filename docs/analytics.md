@@ -64,6 +64,17 @@ Forbidden response; it only accepts requests from `https://sentagram.win`.
   clearing or blocked storage can count a returning browser again.
 - **Page views:** one per page load. Word moves, guesses, practice puzzles, opening
   dev mode, and checking analytics do not generate extra views.
+- **Attempted:** a daily game with at least one checked guess, not merely a visit
+  or a word being moved. The result section covers games first recorded in the
+  selected UTC period. A returning player can contribute one game on each day.
+- **Solved / failed / unfinished:** solved games have a correct submitted answer;
+  failed games used all three guesses; unfinished games still have guesses left.
+  The histogram separates solves in one, two and three guesses from failures.
+  Unfinished games are not counted as failures or included in that histogram.
+- **Result updates:** a reloaded or retried daily game is counted once. A finished
+  game stays finished if an older tab sends an outdated snapshot. Games started
+  before UTC midnight and completed after it stay in their original reporting
+  period. Practice and the code-only special puzzle never contribute results.
 - **Daily visitors:** today's count is partial. All report dates use UTC, while
   the daily puzzle continues to reset at each player's local midnight.
 - **Visitor-days by country:** a returning browser counts again on another day.
@@ -79,9 +90,15 @@ Forbidden response; it only accepts requests from `https://sentagram.win`.
 
 ## Data and maintenance
 
-The database contains a random page-load ID, a hash of a daily random browser ID,
-the UTC day, and a country code. It contains no IP addresses, names, emails, precise
-locations, guesses, or puzzle answers. The random browser ID rotates daily and is
+The traffic database contains a random page-load ID, a hash of a daily random
+browser ID, the UTC day, and a country code. Puzzle statistics contain a separate
+hashed game token, puzzle ID, puzzle date, first-recorded UTC date, guess count,
+and outcome. Neither table stores IP addresses, names, emails, precise locations,
+word orders, or puzzle answers. Puzzle results are not linked to visitor countries.
+The browser keeps the current game's random token inside the existing analytics
+storage entry, so refreshes and crossing UTC midnight do not duplicate a daily
+game. It is replaced for the next local puzzle date; there is no cross-day player
+profile or additional storage key. The traffic ID still rotates daily and is
 separate from game progress. The analytics password is held only in memory while
 the Analytics tab is open; changing tabs, closing the window, or Lock analytics
 clears it. The Worker never sends this password back in a report.
@@ -89,6 +106,11 @@ clears it. The Worker never sends this password back in a report.
 A daily Worker schedule removes records older than the most recent 90 UTC dates.
 There are no analytics cookies or third-party tracking scripts. Network requests
 to the Worker are best-effort and never prevent the game from loading or playing.
+This does not, by itself, establish a legal consent exemption: local storage and
+similar technologies can also fall under privacy rules. See the
+[ICO's storage and cookies guidance](https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guide-to-pecr/cookies-and-similar-technologies/).
+This update adds no cookie banners or consent pop-ups. Result collection begins
+with the updated game code; past results cannot be reconstructed for everyone.
 
 This uses the Workers and D1 free allowances; it is not a guarantee of unlimited
 free traffic. Keep your Cloudflare account on its free plan if that is what you

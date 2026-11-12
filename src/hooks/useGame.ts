@@ -4,11 +4,13 @@ import type { GameAction } from '../game/state';
 import { dayKey, millisecondsToMidnight } from '../game/daily';
 import { localProgressRepository, STORAGE_KEY } from '../game/storage';
 import type { ProgressRepository } from '../game/storage';
+import { trackDailyGame } from '../analytics/client';
 
 export function useGame(repository: ProgressRepository = localProgressRepository) {
   const [state, reduce] = useReducer(gameReducer, undefined, () => repository.load());
   const [saveFailed, setSaveFailed] = useState(false);
   useEffect(() => { setSaveFailed(!repository.save(state)); }, [repository, state]);
+  useEffect(() => { trackDailyGame(state); }, [state]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;

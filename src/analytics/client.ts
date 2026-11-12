@@ -1,4 +1,6 @@
 import { parseReport } from './types';
+import { dailyPuzzle, dayKey } from '../game/daily';
+import type { SavedProgress } from '../game/types';
 
 export const DEFAULT_ANALYTICS_URL = 'https://sentagram-analytics.sentagram.workers.dev';
 
@@ -15,22 +17,72 @@ export function analyticsEndpoint(value = import.meta.env.VITE_ANALYTICS_URL ?? 
 
 const VISITOR_KEY = 'sentagram.analytics.daily-visitor';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-let memoryVisitor: { day: string; id: string } | undefined;
+interface GameIdentity { day: string; puzzleId: string; id: string }
+interface VisitorIdentity { day: string; id: string; game?: GameIdentity }
+let memoryVisitor: VisitorIdentity | undefined;
 let tracked = false;
+const gameReports = new Set<string>();
+
+function currentGame(value: unknown): GameIdentity | undefined {
+  const game = value as GameIdentity | null;
+  return game && game.day === dayKey() && typeof game.puzzleId === 'string' &&
+    /^[a-z0-9][a-z0-9-]{0,79}$/.test(game.puzzleId) && typeof game.id === 'string' && UUID.test(game.id)
+    ? { day: game.day, puzzleId: game.puzzleId, id: game.id } : undefined;
+}
+
+function saveIdentity() {
+  try { localStorage.setItem(VISITOR_KEY, JSON.stringify(memoryVisitor)); } catch { /* The game still works. */ }
+}
 
 function dailyVisitor() {
   const day = new Date().toISOString().slice(0, 10);
   if (memoryVisitor?.day === day) return memoryVisitor.id;
+  let game = currentGame(memoryVisitor?.game);
   try {
     const saved = JSON.parse(localStorage.getItem(VISITOR_KEY) ?? 'null');
+    game = currentGame(saved?.game) ?? game;
     if (saved?.day === day && typeof saved.id === 'string' && UUID.test(saved.id)) {
-      memoryVisitor = saved;
+      memoryVisitor = { day, id: saved.id, game };
       return saved.id as string;
     }
   } catch { /* Storage may be blocked; retain an ID for this document only. */ }
-  memoryVisitor = { day, id: crypto.randomUUID() };
-  try { localStorage.setItem(VISITOR_KEY, JSON.stringify(memoryVisitor)); } catch { /* The game still works. */ }
+  memoryVisitor = { day, id: crypto.randomUUID(), game };
+  saveIdentity();
   return memoryVisitor.id;
+}
+
+/** Only submitted guesses in the actual daily game qualify as an attempt. */
+export function trackDailyGame(state: SavedProgress) {
+  const endpoint = analyticsEndpoint();
+  if (!import.meta.env.PROD || location.hostname !== 'sentagram.win' || !endpoint || navigator.doNotTrack === '1' ||
+    state.specialActive || (state.devMode && state.practicePuzzleId !== null) || state.day !== dayKey()) return;
+  const attempts = state.daily.guesses.length;
+  const status = state.daily.status === 'revealed' ? 'failed' : state.daily.status;
+  if (attempts < 1 || attempts > 3 || (status === 'playing' && attempts === 3) || (status === 'failed' && attempts !== 3)) return;
+  try {
+    dailyVisitor();
+    const puzzleId = dailyPuzzle(state.day).id;
+    // Another tab may have created the game token since this document loaded.
+    try {
+      const saved = currentGame(JSON.parse(localStorage.getItem(VISITOR_KEY) ?? 'null')?.game);
+      if (saved?.day === state.day && saved.puzzleId === puzzleId) memoryVisitor!.game = saved;
+    } catch { /* Keep the document's in-memory token when storage is unavailable. */ }
+    if (memoryVisitor!.game?.day !== state.day || memoryVisitor!.game?.puzzleId !== puzzleId) {
+      memoryVisitor!.game = { day: state.day, puzzleId, id: crypto.randomUUID() };
+      saveIdentity();
+    }
+    const playId = memoryVisitor!.game!.id;
+    const signature = `${playId}:${attempts}:${status}`;
+    if (gameReports.has(signature)) return;
+    gameReports.add(signature);
+    // No selected words, guesses, answers or traffic visitor ID leave the browser.
+    const body = JSON.stringify({ playId, gameDay: state.day, puzzleId, attempts, status });
+    void fetch(endpoint + '/puzzle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      keepalive: true, credentials: 'omit', cache: 'no-store',
+    }).then(response => { if (!response.ok) gameReports.delete(signature); })
+      .catch(() => { gameReports.delete(signature); });
+  } catch { /* Analytics must never interfere with checking or restoring a puzzle. */ }
 }
 
 /** Once per page load, outside React StrictMode. Failure must never block play. */

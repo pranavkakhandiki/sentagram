@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { analyticsEndpoint, AnalyticsAccessError, fetchReport } from '../analytics/client';
 import type { AnalyticsReport } from '../analytics/types';
+import { PuzzleResultsPanel } from './PuzzleResultsPanel';
 
 const SETUP_URL = 'https://github.com/pranavkakhandiki/sentagram/blob/main/docs/analytics.md';
 const count = (value: number) => value.toLocaleString('en-US');
@@ -85,6 +86,7 @@ export function AnalyticsPanel() {
           <div><dt>Visitors today</dt><dd>{count(today?.visitors ?? 0)}</dd></div>
           <div><dt>Page views · {days === 1 ? 'today' : days + ' days'}</dt><dd>{count(totalViews)}</dd></div>
         </dl>
+        <PuzzleResultsPanel results={report.puzzleResults} />
         {totalViews === 0 ? <p className="analytics-status">No visits recorded for this period yet.</p> : <>
           <h3 className="analytics-section-title">Daily visitors</h3>
           <div className="analytics-chart" role="img" aria-label={`Daily visitors over ${days} ${days === 1 ? 'day' : 'days'}. Exact counts in Daily breakdown below.`}>

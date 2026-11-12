@@ -1,11 +1,22 @@
 export interface DailyTraffic { day: string; visitors: number; pageviews: number }
 export interface CountryTraffic { code: string; visitors: number; pageviews: number }
+export interface PuzzleResults {
+  attempted: number;
+  solved: number;
+  failed: number;
+  unfinished: number;
+  one: number;
+  two: number;
+  three: number;
+}
 export interface AnalyticsReport {
   timezone: 'UTC';
   generatedAt: string;
   days: number;
   daily: DailyTraffic[];
   countries: CountryTraffic[];
+  /** Optional while the new backend rolls out; missing data is not zero. */
+  puzzleResults?: PuzzleResults;
 }
 
 export function parseReport(value: unknown): AnalyticsReport {
@@ -17,5 +28,11 @@ export function parseReport(value: unknown): AnalyticsReport {
     !report.daily.every(row => row && /^\d{4}-\d{2}-\d{2}$/.test(row.day) && count(row.visitors) && count(row.pageviews)) ||
     !Array.isArray(report.countries) || !report.countries.every(row => row && /^[A-Z]{2}$/.test(row.code) && count(row.visitors) && count(row.pageviews)))
     throw new Error('Invalid analytics response.');
+  const results = report.puzzleResults;
+  if (results !== undefined && (!results ||
+    !['attempted', 'solved', 'failed', 'unfinished', 'one', 'two', 'three'].every(key => count(results[key as keyof PuzzleResults])) ||
+    results.one + results.two + results.three !== results.solved ||
+    results.solved + results.failed + results.unfinished !== results.attempted))
+    throw new Error('Invalid puzzle result counts.');
   return report;
 }

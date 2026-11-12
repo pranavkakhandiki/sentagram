@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { DatabaseSync as SQLiteDatabase } from 'node:sqlite';
 import { webcrypto } from 'node:crypto';
@@ -23,7 +23,8 @@ beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
   vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
   sqlite = new DatabaseSync(':memory:');
-  sqlite.exec(readFileSync('analytics-worker/migrations/0001_traffic.sql', 'utf8'));
+  for (const file of readdirSync('analytics-worker/migrations').filter(file => file.endsWith('.sql')).sort())
+    sqlite.exec(readFileSync('analytics-worker/migrations/' + file, 'utf8'));
   const DB: AnalyticsDatabase = {
     prepare: sql => new Prepared(sql),
     async batch(statements) {
@@ -54,6 +55,59 @@ async function getReport(days = '7', secret: string | null = password, requestOr
   if (secret !== null) headers.set('Authorization', 'Bearer ' + secret);
   return worker.fetch(new Request('https://analytics.example/report?days=' + days, { headers }), env);
 }
+
+async function puzzle(attempts: number, status = 'playing', playId = crypto.randomUUID(), extra: Record<string, unknown> = {}) {
+  const payload = { playId, gameDay: new Date().toISOString().slice(0, 10), puzzleId: 'a-daily-puzzle', attempts, status, ...extra };
+  return worker.fetch(new Request('https://analytics.example/puzzle', { method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }), env);
+}
+
+describe('anonymous daily puzzle results', () => {
+  it('reports solved-in-1/2/3, failed, and unfinished as separate outcomes', async () => {
+    for (const attempts of [1, 2, 3]) expect((await puzzle(attempts, 'solved')).status).toBe(204);
+    await puzzle(3, 'failed'); await puzzle(1); await puzzle(2);
+    const report = parseReport(await (await getReport()).json());
+    expect(report.puzzleResults).toEqual({ attempted: 6, solved: 3, failed: 1, unfinished: 2, one: 1, two: 1, three: 1 });
+    const rows = sqlite.prepare('SELECT * FROM puzzle_plays').all();
+    expect(Object.keys(rows[0]).sort()).toEqual(['attempts', 'game_day', 'play_hash', 'puzzle_id', 'started_day', 'status']);
+    expect(rows[0].play_hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+  it('deduplicates reloads and retries, advances unfinished games, and never regresses a terminal result', async () => {
+    const id = crypto.randomUUID();
+    await puzzle(1, 'playing', id); await puzzle(1, 'playing', id); await puzzle(2, 'playing', id);
+    await puzzle(1, 'playing', id); await puzzle(3, 'solved', id);
+    await puzzle(2, 'playing', id); await puzzle(3, 'failed', id); await puzzle(3, 'solved', id);
+    expect(parseReport(await (await getReport()).json()).puzzleResults).toEqual({ attempted: 1, solved: 1, failed: 0, unfinished: 0, one: 0, two: 0, three: 1 });
+    expect(JSON.stringify(sqlite.prepare('SELECT * FROM puzzle_plays').all())).not.toContain(id);
+  });
+  it('accepts a terminal result from another tab and keeps cross-midnight results in their original reporting period', async () => {
+    const id = crypto.randomUUID();
+    vi.setSystemTime(new Date('2026-11-12T23:59:00Z'));
+    await puzzle(2, 'playing', id);
+    vi.setSystemTime(new Date('2026-11-13T00:01:00Z'));
+    await puzzle(1, 'solved', id, { gameDay: '2026-11-12' });
+    const row = sqlite.prepare('SELECT * FROM puzzle_plays').get()!;
+    expect(row.started_day).toBe('2026-11-12'); expect(row.status).toBe('solved'); expect(row.attempts).toBe(1);
+    expect(parseReport(await (await getReport('1')).json()).puzzleResults?.attempted).toBe(0);
+    expect(parseReport(await (await getReport('7')).json()).puzzleResults?.one).toBe(1);
+  });
+  it('rejects invalid counts, non-daily special puzzles, dates outside the local-day window, and invalid payloads', async () => {
+    for (const [attempts, status] of [[0, 'playing'], [4, 'solved'], [2.5, 'solved'], [3, 'playing'], [1, 'failed'], [1, 'unknown']] as const)
+      expect((await puzzle(attempts, status)).status).toBe(400);
+    for (const extra of [{ gameDay: '2026-02-31' }, { gameDay: '2026-11-10' }, { gameDay: '2026-11-14' },
+      { puzzleId: 'one-little-question' }, { status: ['solved'] }, { playId: 'invalid' }])
+      expect((await puzzle(1, 'solved', crypto.randomUUID(), extra)).status).toBe(400);
+    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM puzzle_plays').get()?.n).toBe(0);
+    expect((await puzzle(1, 'solved', crypto.randomUUID(), { gameDay: '2026-11-13' })).status).toBe(204);
+  });
+  it('expires puzzle statistics with the same 90-day retention as traffic', async () => {
+    vi.setSystemTime(new Date('2026-08-14T12:00:00Z')); await puzzle(1, 'solved');
+    vi.setSystemTime(new Date('2026-08-15T12:00:00Z')); await puzzle(3, 'failed');
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z')); await puzzle(2);
+    await worker.scheduled({}, env);
+    expect(sqlite.prepare('SELECT started_day FROM puzzle_plays ORDER BY started_day').all().map(row => row.started_day)).toEqual(['2026-08-15', '2026-11-12']);
+  });
+});
 
 describe('shared traffic counts against the real SQLite schema', () => {
   it('counts reloads as views but one visitor per day, and reports the correct countries', async () => {
