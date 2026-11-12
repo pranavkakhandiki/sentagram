@@ -5,3 +5,9 @@ dist/
 .DS_Store
 coverage/
 .verification/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example

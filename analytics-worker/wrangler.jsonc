@@ -1,0 +1,17 @@
+{
+  "name": "sentagram-analytics",
+  "account_id": "eed77930dccd2150a7313920cc2db93c",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "ALLOWED_ORIGIN": "https://sentagram.win" },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "sentagram-analytics",
+    "database_id": "b10231ec-7a48-49db-85a8-005e5c6bb534",
+    "migrations_dir": "migrations"
+  }],
+  "triggers": { "crons": ["17 4 * * *"] }
+}

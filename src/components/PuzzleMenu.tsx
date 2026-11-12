@@ -1,13 +1,34 @@
+import { useRef, useState } from 'react';
 import { puzzles } from '../data/puzzles';
 import type { SavedProgress } from '../game/types';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
+import { AnalyticsPanel } from './AnalyticsPanel';
 
 export function PuzzleMenu({ state, onSelect, onToday, onClose }: {
   state: SavedProgress; onSelect: (id: string) => void; onToday: () => void; onClose: () => void;
 }) {
+  const [tab, setTab] = useState<'puzzles' | 'analytics'>('puzzles');
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   return (
-    <Modal title="Puzzle bank" onClose={onClose} className="collection-modal">
+    <Modal title={tab === 'puzzles' ? 'Puzzle bank' : 'Analytics'} onClose={onClose} className="collection-modal">
+      <div className="dev-tabs" role="tablist" aria-label="Dev tools" onKeyDown={event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 'puzzles' : event.key === 'End' ? 'analytics' : tab === 'puzzles' ? 'analytics' : 'puzzles';
+        setTab(next); tabs.current[next === 'puzzles' ? 0 : 1]?.focus();
+      }}>
+        {(['puzzles', 'analytics'] as const).map((name, i) => <button key={name} ref={element => { tabs.current[i] = element; }}
+          role="tab" id={'dev-tab-' + name} aria-controls={'dev-panel-' + name}
+          aria-selected={tab === name} tabIndex={tab === name ? 0 : -1} onClick={() => setTab(name)}>
+          {name === 'puzzles' ? 'Puzzles' : 'Analytics'}
+        </button>)}
+      </div>
+      <div role="tabpanel" id="dev-panel-analytics" aria-labelledby="dev-tab-analytics" hidden={tab !== 'analytics'}>
+        {tab === 'analytics' && <AnalyticsPanel />}
+      </div>
+      <div role="tabpanel" id="dev-panel-puzzles" aria-labelledby="dev-tab-puzzles" hidden={tab !== 'puzzles'}>
+      {tab === 'puzzles' && <>
       <p className="collection-summary">Dev mode · {puzzles.length} puzzles</p>
       <button className="secondary-button today-button" onClick={onToday}>Today’s puzzle</button>
       <div className="puzzle-list">
@@ -33,6 +54,8 @@ export function PuzzleMenu({ state, onSelect, onToday, onClose }: {
             </button>
           );
         })}
+      </div>
+      </>}
       </div>
     </Modal>
   );
