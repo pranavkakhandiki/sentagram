@@ -2,7 +2,7 @@ import type { Puzzle, PuzzleProgress } from './types';
 import { dayKey, displayDate } from './daily';
 import { evaluateGuess } from './validation';
 
-export const GAME_URL = 'https://pranavkakhandiki.github.io/sentagram/';
+export const GAME_URL = 'https://sentagram.win/';
 
 export function guessRows(puzzle: Puzzle, progress: PuzzleProgress): string[] {
   return progress.guesses.map((ids) => evaluateGuess(puzzle, ids)!.positions.map(

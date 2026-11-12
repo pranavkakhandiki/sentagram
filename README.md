@@ -1,1 +1,1 @@
-https://pranavkakhandiki.github.io/sentagram/
+https://sentagram.win/

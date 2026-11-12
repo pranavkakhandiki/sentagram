@@ -2,8 +2,8 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  // GitHub project sites live under /<repository>/; local development stays at /.
-  base: process.env.GITHUB_PAGES_BASE || '/',
+  // sentagram.win serves the game at the domain root, as does local preview.
+  base: '/',
   plugins: [react()],
   test: {
     environment: 'jsdom',

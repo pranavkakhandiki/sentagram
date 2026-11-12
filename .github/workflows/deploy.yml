@@ -36,10 +36,8 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build for the repository URL
+      - name: Build for sentagram.win
         run: npm run build
-        env:
-          GITHUB_PAGES_BASE: /${{ github.event.repository.name }}/
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
