@@ -7,11 +7,11 @@ import { STORAGE_KEY } from '../game/storage';
 async function arrange() {
   const user = userEvent.setup();
   render(<App />);
-  for (const word of ['kite', 'hard', 'string'])
+  for (const word of ['cotton', 'clothing', 'sunshine'])
     await user.click(screen.getByRole('button', { name: 'Add ' + word + ' to sentence' }));
-  const source = screen.getByRole('button', { name: 'Return kite to word bank, word 1' });
-  const middle = screen.getByRole('button', { name: 'Return hard to word bank, word 2' });
-  const target = screen.getByRole('button', { name: 'Return string to word bank, word 3' });
+  const source = screen.getByRole('button', { name: 'Return cotton to word bank, word 1' });
+  const middle = screen.getByRole('button', { name: 'Return clothing to word bank, word 2' });
+  const target = screen.getByRole('button', { name: 'Return sunshine to word bank, word 3' });
   vi.spyOn(source.closest('.sentence-area')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 240, 160));
   vi.spyOn(source, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 60, 46));
   vi.spyOn(middle, 'getBoundingClientRect').mockReturnValue(new DOMRect(80, 10, 60, 46));
@@ -36,21 +36,21 @@ describe('placed-word insertion', () => {
     drag(source, 150, 100);
     expect(document.querySelector('.insertion-marker')).not.toBeNull();
     expect(source).toHaveClass('drag-source');
-    expect(words()).toEqual(['Kite', 'hard', 'string']);
+    expect(words()).toEqual(['Cotton', 'clothing', 'sunshine']);
     drop(source, 150, 100);
-    expect(words()).toEqual(['Hard', 'kite', 'string']);
-    expect(screen.queryByRole('button', { name: 'Add kite to sentence' })).not.toBeInTheDocument();
+    expect(words()).toEqual(['Clothing', 'cotton', 'sunshine']);
+    expect(screen.queryByRole('button', { name: 'Add cotton to sentence' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(words()).toEqual(['Kite', 'hard', 'string']);
+    expect(words()).toEqual(['Cotton', 'clothing', 'sunshine']);
     await user.click(source);
-    expect(words()).toEqual(['Hard', 'string']);
+    expect(words()).toEqual(['Clothing', 'sunshine']);
   });
   it('inserts after the final word with touch and persists the relative order of every other tile', async () => {
     const { source } = await arrange();
     const before = JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily.selectedIds;
     drag(source, 210, 100, 'touch');
     drop(source, 210, 100);
-    expect(words()).toEqual(['Hard', 'string', 'kite']);
+    expect(words()).toEqual(['Clothing', 'sunshine', 'cotton']);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily.selectedIds).toEqual([before[1], before[2], before[0]]);
   });
   it('moves a word to the beginning and keeps all the intervening words in order', async () => {
@@ -58,14 +58,14 @@ describe('placed-word insertion', () => {
     fireEvent.pointerDown(target, { pointerId: 1, button: 0, clientX: 170, clientY: 100 });
     fireEvent.pointerMove(target, { pointerId: 1, clientX: 5, clientY: 30 });
     drop(target, 5, 30);
-    expect(words()).toEqual(['String', 'kite', 'hard']);
+    expect(words()).toEqual(['Sunshine', 'cotton', 'clothing']);
   });
   it('cancels a drag without adding history', async () => {
     const { source } = await arrange();
     const before = localStorage.getItem(STORAGE_KEY);
     drag(source, 210, 100);
     fireEvent.pointerCancel(source, { pointerId: 1 });
-    expect(words()).toEqual(['Kite', 'hard', 'string']);
+    expect(words()).toEqual(['Cotton', 'clothing', 'sunshine']);
     expect(document.querySelector('.drag-preview')).toBeNull();
     expect(document.querySelector('.insertion-marker')).toBeNull();
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
@@ -75,7 +75,7 @@ describe('placed-word insertion', () => {
     const before = localStorage.getItem(STORAGE_KEY);
     drag(source, 150, 100);
     drop(source, 500, 500);
-    expect(words()).toEqual(['Kite', 'hard', 'string']);
+    expect(words()).toEqual(['Cotton', 'clothing', 'sunshine']);
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
   it('does not add undo history when dropped in its original position', async () => {
@@ -83,7 +83,7 @@ describe('placed-word insertion', () => {
     const before = localStorage.getItem(STORAGE_KEY);
     drag(source, 65, 30);
     drop(source, 65, 30);
-    expect(words()).toEqual(['Kite', 'hard', 'string']);
+    expect(words()).toEqual(['Cotton', 'clothing', 'sunshine']);
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
   it('treats small touch movements as taps', async () => {
@@ -91,17 +91,17 @@ describe('placed-word insertion', () => {
     fireEvent.pointerDown(source, { pointerId: 1, pointerType: 'touch', button: 0, clientX: 30, clientY: 30 });
     fireEvent.pointerMove(source, { pointerId: 1, pointerType: 'touch', clientX: 33, clientY: 32 });
     drop(source, 33, 32);
-    expect(words()).toEqual(['Hard', 'string']);
+    expect(words()).toEqual(['Clothing', 'sunshine']);
   });
   it('supports keyboard movement with retained focus and Undo', async () => {
     const { user, source } = await arrange();
     source.focus();
     await user.keyboard('{Alt>}{ArrowRight}{/Alt}');
-    expect(words()).toEqual(['Hard', 'kite', 'string']);
-    expect(screen.getByRole('button', { name: 'Return kite to word bank, word 2' })).toHaveFocus();
+    expect(words()).toEqual(['Clothing', 'cotton', 'sunshine']);
+    expect(screen.getByRole('button', { name: 'Return cotton to word bank, word 2' })).toHaveFocus();
     await user.keyboard('{Alt>}{ArrowRight}{/Alt}');
-    expect(words()).toEqual(['Hard', 'string', 'kite']);
+    expect(words()).toEqual(['Clothing', 'sunshine', 'cotton']);
     await user.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(words()).toEqual(['Hard', 'kite', 'string']);
+    expect(words()).toEqual(['Clothing', 'cotton', 'sunshine']);
   });
 });

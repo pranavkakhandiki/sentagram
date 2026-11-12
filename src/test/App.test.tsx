@@ -38,16 +38,16 @@ describe('daily game interface', () => {
   it('keeps duplicate words distinct, supports Undo and Clear, and preserves partial progress after reload', async () => {
     const user = userEvent.setup();
     const app = render(<App />);
-    for (const word of ['wind', 'made', 'wind'])
+    for (const word of ['of', 'clothing', 'of'])
       await user.click(screen.getAllByRole('button', { name: 'Add ' + word + ' to sentence' })[0]);
-    await user.click(screen.getByRole('button', { name: 'Return made to word bank, word 2' }));
-    expect(screen.getByRole('button', { name: 'Return wind to word bank, word 2' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Return clothing to word bank, word 2' }));
+    expect(screen.getByRole('button', { name: 'Return of to word bank, word 2' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     await user.click(screen.getByRole('button', { name: 'Clear' }));
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     app.unmount();
     render(<App />);
-    expect(screen.getByRole('button', { name: 'Return made to word bank, word 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return clothing to word bank, word 2' })).toBeInTheDocument();
     expect(screen.getByLabelText('3 guesses remaining')).toBeInTheDocument();
   });
   it('shows one swap away, retains the guess after Undo, then solves and copies real emoji rows', async () => {
@@ -91,7 +91,7 @@ describe('daily game interface', () => {
     expect(screen.queryByRole('button', { name: 'Check' })).not.toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Your attempts' }).children).toHaveLength(3);
     const sentence = within(screen.getByLabelText('Constructed sentence')).getAllByRole('button');
-    expect(sentence.map((word) => word.textContent)).toEqual(['The', 'wind', 'made', 'it', 'hard', 'to', 'wind', 'the', 'kite', 'string']);
+    expect(sentence.map((word) => word.textContent)).toEqual(['The', 'cotton', 'clothing', 'is', 'made', 'of', 'needs', 'plenty', 'of', 'sunshine']);
     expect(sentence.every((word) => (word as HTMLButtonElement).disabled)).toBe(true);
     app.unmount();
     render(<App />);
@@ -102,7 +102,7 @@ describe('daily game interface', () => {
   it('requires the code for bank access and isolates practice guesses from the daily game', async () => {
     const user = userEvent.setup();
     const app = render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Add kite to sentence' }));
+    await user.click(screen.getByRole('button', { name: 'Add cotton to sentence' }));
     await user.click(screen.getByRole('button', { name: 'How to play' }));
     await user.click(screen.getByRole('switch', { name: 'Dev mode' }));
     await user.type(screen.getByLabelText('Dev code'), '1111');
@@ -115,7 +115,7 @@ describe('daily game interface', () => {
     await user.click(screen.getByRole('button', { name: 'Let’s play' }));
     await user.click(screen.getByRole('button', { name: 'Open puzzle collection' }));
     expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Puzzle \d/ })).toHaveLength(50);
-    await user.click(screen.getByRole('button', { name: 'Puzzle 01, Gentle, Not played' }));
+    await user.click(screen.getByRole('button', { name: 'Puzzle 01, Tricky, Not played' }));
     expect(screen.getByRole('heading', { name: 'Practice · Puzzle 01' })).toBeInTheDocument();
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Check' }));
@@ -129,7 +129,7 @@ describe('daily game interface', () => {
     await user.click(screen.getByRole('switch', { name: 'Dev mode' }));
     await user.click(screen.getByRole('button', { name: 'Let’s play' }));
     expect(screen.getByRole('heading', { name: '15 October 2026' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Return kite to word bank, word 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return cotton to word bank, word 1' })).toBeInTheDocument();
     expect(screen.queryByText(/Gentle/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open puzzle collection' })).not.toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe('daily game interface', () => {
     render(<App />);
     await unlock(user);
     await user.click(screen.getByRole('button', { name: 'Open puzzle collection' }));
-    await user.click(screen.getByRole('button', { name: 'Puzzle 20, Thoughtful, Not played' }));
+    await user.click(screen.getByRole('button', { name: 'Puzzle 20, Tricky, Not played' }));
     expect(screen.getByRole('heading', { name: 'Practice · Puzzle 20' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back to today’s puzzle' }));
     expect(screen.getByLabelText('2 guesses remaining')).toBeInTheDocument();
@@ -162,12 +162,12 @@ describe('daily game interface', () => {
     fireEvent(document, new Event('visibilitychange'));
     expect(screen.getByRole('heading', { name: '16 October 2026' })).toBeInTheDocument();
     vi.setSystemTime(new Date(2026, 9, 17, 9));
-    await user.click(screen.getByRole('button', { name: 'Add scoreboard to sentence' }));
+    await user.click(screen.getByRole('button', { name: 'Add horse to sentence' }));
     expect(screen.getByRole('heading', { name: '17 October 2026' })).toBeInTheDocument();
     expect(screen.getByText('Arrange the words.')).toBeInTheDocument();
   });
   it('uses the proper punctuation for a saved accepted alternative', () => {
-    const puzzle = puzzles[2], available = [...puzzle.solutionTokens];
+    const puzzle = puzzles[1], available = [...puzzle.solutionTokens];
     const selectedIds = puzzle.alternativeSolutions![0].words.map((word) => {
       const i = available.findIndex((token) => token.preserveCase ? token.text === word : token.text.toLowerCase() === word.toLowerCase());
       return available.splice(i, 1)[0].id;
@@ -184,16 +184,16 @@ describe('daily game interface', () => {
     const user = userEvent.setup();
     render(<App />);
     expect(screen.getByText(/Your browser can’t save/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Add kite to sentence' }));
-    expect(screen.getByRole('button', { name: 'Return kite to word bank, word 1' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add cotton to sentence' }));
+    expect(screen.getByRole('button', { name: 'Return cotton to word bank, word 1' })).toBeInTheDocument();
     set.mockRestore();
   });
   it('supports keyboard tile selection and closes help on Escape', async () => {
     const user = userEvent.setup();
     render(<App />);
-    screen.getByRole('button', { name: 'Add kite to sentence' }).focus();
+    screen.getByRole('button', { name: 'Add cotton to sentence' }).focus();
     await user.keyboard('{Enter}');
-    expect(screen.getByRole('button', { name: 'Return kite to word bank, word 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return cotton to word bank, word 1' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'How to play' }));
     fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -237,7 +237,7 @@ describe('repeat guesses and the special code', () => {
   it('opens 4321 directly, uses pink only after solving, restores the result, and leaves 2026 working', async () => {
     const user = userEvent.setup();
     const app = render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Add kite to sentence' }));
+    await user.click(screen.getByRole('button', { name: 'Add cotton to sentence' }));
     const daily = JSON.parse(localStorage.getItem(STORAGE_KEY)!).daily;
     await user.click(screen.getByRole('button', { name: 'How to play' }));
     await user.click(screen.getByRole('switch', { name: 'Dev mode' }));
@@ -262,7 +262,7 @@ describe('repeat guesses and the special code', () => {
     render(<App />);
     expect(document.querySelector('.puzzle-pink .sentence-solved')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Back to today’s puzzle' }));
-    expect(screen.getByRole('button', { name: 'Return kite to word bank, word 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return cotton to word bank, word 1' })).toBeInTheDocument();
     expect(screen.getByRole('article')).not.toHaveClass('puzzle-pink');
     await unlock(user);
     await user.click(screen.getByRole('button', { name: 'Open puzzle collection' }));

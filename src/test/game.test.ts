@@ -14,8 +14,21 @@ describe('curated puzzle integrity', () => {
     expect(new Set(puzzles.map((puzzle) => puzzle.id)).size).toBe(50);
     expect(puzzles.map((puzzle) => puzzle.number)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
     expect(new Set(puzzles.map((puzzle) => puzzle.solutionTokens.map(bankLabel).sort().join('|'))).size).toBe(50);
-    expect(puzzles.some((puzzle) => ['two-busy-months', 'flying-fruit'].includes(puzzle.id))).toBe(false);
-    expect(puzzles.slice(20).every((puzzle) => puzzle.difficulty !== 'Gentle')).toBe(true);
+    expect(puzzles.every((puzzle) => puzzle.difficulty !== 'Gentle')).toBe(true);
+  });
+  it('retires the easy idiom punchlines and gives every rewritten inventory a fresh ID', () => {
+    const retired = ['a-windy-day', 'the-sporting-disaster', 'the-flower-garden', 'the-musician',
+      'keeping-watch', 'minute-adjustment', 'the-mayors-gift', 'cast-of-characters', 'fine-by-me',
+      'second-fiddle', 'all-hands-on-deck', 'board-meeting', 'historical-date', 'waiting-room',
+      'ends-meet', 'sleeping-on-it', 'picking-winner', 'broken-record', 'silent-letter',
+      'twelve-months', 'lost-interest', 'saw-it-coming', 'fair-enough', 'know-the-score',
+      'cover-story', 'spring-cleaning', 'leak-investigation', 'an-objection', 'rise-to-it',
+      'a-hard-time', 'heavy-metal', 'rock-and-roll', 'holding-water', 'a-suit-dismissed',
+      'a-hard-case', 'a-sharp-student', 'flat-and-sharp', 'sour-notes', 'lost-for-words',
+      'losing-temper', 'a-spectacle', 'missing-the-point', 'a-growing-plot', 'an-undercover-plant',
+      'measuring-up', 'a-right-hand-man', 'charged-with-battery', 'another-branch',
+      'drawing-the-line', 'drawing-a-blank', 'two-busy-months', 'flying-fruit'];
+    expect(puzzles.some((puzzle) => retired.includes(puzzle.id))).toBe(false);
   });
   for (const puzzle of puzzles) {
     it(puzzle.title + ': every tile is preserved in a deterministic scramble and the answer is accepted', () => {
@@ -34,13 +47,16 @@ describe('curated puzzle integrity', () => {
         expect(acceptedSentence(puzzle, ids)).toEqual(alternative);
         expect([...ids].sort()).toEqual(puzzle.solutionTokens.map((token) => token.id).sort());
         expect(evaluateGuess(puzzle, ids)?.positions.every(Boolean)).toBe(true);
+        const solved = gameReducer(orderedState(puzzle, ids), { type: 'check' });
+        expect(activeGame(solved).progress.status).toBe('solved');
+        expect(guessRows(puzzle, activeGame(solved).progress)).toEqual(['🟩'.repeat(ids.length)]);
       });
     }
   }
   it('accepts identical words with exchanged IDs, including repeated sentence-initial articles', () => {
     const puzzle = puzzles[6], ids = puzzle.solutionTokens.map((token) => token.id);
-    [ids[1], ids[9]] = [ids[9], ids[1]];
-    [ids[0], ids[4]] = [ids[4], ids[0]];
+    [ids[1], ids[8]] = [ids[8], ids[1]];
+    [ids[0], ids[2]] = [ids[2], ids[0]];
     expect(acceptedSentence(puzzle, ids)).not.toBeNull();
   });
   it('rejects missing words, reused IDs, foreign IDs, and incorrect sequences', () => {
@@ -49,10 +65,10 @@ describe('curated puzzle integrity', () => {
       expect(evaluateGuess(puzzle, guess)).toBeNull();
     expect(acceptedSentence(puzzle, [...ids].reverse())).toBeNull();
   });
-  it('retains names and months while hiding ordinary sentence-initial capitals', () => {
+  it('retains a name while hiding ordinary sentence-initial capitals', () => {
     expect(bankLabel(puzzles[0].solutionTokens[0])).toBe('the');
-    expect(sentenceLabel(puzzles[0].solutionTokens[7], 0)).toBe('The');
-    expect(bankLabel(puzzles[2].solutionTokens[0])).toBe('Rose');
+    expect(sentenceLabel(puzzles[0].solutionTokens[0], 0)).toBe('The');
+    expect(bankLabel(puzzles[2].solutionTokens[2])).toBe('Rose');
     expect(bankLabel(puzzles[2].solutionTokens[1])).toBe('rose');
   });
   it('keeps punctuation outside words and retains apostrophes', () => {
@@ -61,7 +77,7 @@ describe('curated puzzle integrity', () => {
       format: { before: {}, after: { 1: ',' }, ending: '.' },
     });
     expect(formatSentence(puzzles[0].solutionTokens, puzzles[0].format)).toBe(
-      'The wind made it hard to wind the kite string.',
+      'The cotton clothing is made of needs plenty of sunshine.',
     );
   });
 });
@@ -119,20 +135,20 @@ describe('three guesses and one-swap feedback', () => {
   });
   it('does not call an already-correct duplicate swap or a three-word rotation one away', () => {
     const duplicate = [...ids];
-    [duplicate[1], duplicate[6]] = [duplicate[6], duplicate[1]];
+    [duplicate[5], duplicate[8]] = [duplicate[8], duplicate[5]];
     expect(evaluateGuess(puzzle, duplicate)).toMatchObject({ correct: true, oneSwapAway: false });
     const rotation = [...ids];
     [rotation[0], rotation[2], rotation[9]] = [rotation[2], rotation[9], rotation[0]];
     expect(evaluateGuess(puzzle, rotation)).toMatchObject({ correct: false, oneSwapAway: false });
   });
   it('recognizes one swap from an accepted alternative, respecting proper capitals', () => {
-    const alternativePuzzle = puzzles[2];
+    const alternativePuzzle = puzzles[1];
     const alternative = idsForWords(alternativePuzzle, alternativePuzzle.alternativeSolutions![0].words);
     [alternative[0], alternative[alternative.length - 1]] = [alternative[alternative.length - 1], alternative[0]];
     expect(evaluateGuess(alternativePuzzle, alternative)).toMatchObject({ correct: false, oneSwapAway: true });
-    const monthIds = puzzles[2].solutionTokens.map((token) => token.id);
-    [monthIds[0], monthIds[1]] = [monthIds[1], monthIds[0]];
-    expect(acceptedSentence(puzzles[2], monthIds)).toBeNull();
+    const nameIds = puzzles[2].solutionTokens.map((token) => token.id);
+    [nameIds[1], nameIds[2]] = [nameIds[2], nameIds[1]];
+    expect(acceptedSentence(puzzles[2], nameIds)).toBeNull();
   });
   it('ignores incomplete checks; saves failed arrangements and reveals on precisely the third miss', () => {
     const partial = orderedState(puzzle, ids.slice(0, 2));
@@ -172,8 +188,8 @@ describe('editing and isolated development play', () => {
     state = gameReducer(state, { type: 'undo' });
     expect(state.daily.selectedIds).toEqual(ids);
     expect(state.daily.guesses).toHaveLength(1);
-    state = gameReducer(state, { type: 'remove', tokenId: ids[1] });
-    expect(state.daily.selectedIds).toContain(ids[6]);
+    state = gameReducer(state, { type: 'remove', tokenId: ids[5] });
+    expect(state.daily.selectedIds).toContain(ids[8]);
     state = gameReducer(state, { type: 'undo' });
     expect(state.daily.selectedIds).toEqual(ids);
     state = gameReducer(state, { type: 'clear' });
@@ -210,6 +226,17 @@ describe('editing and isolated development play', () => {
 });
 
 describe('daily persistence', () => {
+  it('drops retired tile orders and practice selections while keeping dev access and special progress', () => {
+    const oldIds = Array.from({ length: 10 }, (_, i) => `a-windy-day-word-${i}`);
+    const retired = { selectedIds: oldIds, guesses: [oldIds], history: [oldIds], status: 'solved' };
+    const specialIds = specialPuzzle.solutionTokens.map((token) => token.id);
+    const special = { ...emptyProgress(), selectedIds: specialIds, guesses: [specialIds], status: 'solved' as const };
+    const raw = { ...initialState(LAUNCH_DAY), devMode: true, daily: retired,
+      practicePuzzleId: 'a-windy-day', practice: { 'a-windy-day': retired }, special };
+    expect(sanitizeProgress(raw, LAUNCH_DAY)).toEqual({
+      ...initialState(LAUNCH_DAY), devMode: true, special,
+    });
+  });
   it('restores guesses, edits, undo history and development progress', () => {
     let state = gameReducer(orderedState(puzzles[0], puzzles[0].wordBank.map((token) => token.id)), { type: 'check' });
     state = gameReducer(state, { type: 'remove', tokenId: state.daily.selectedIds[0] });
@@ -260,7 +287,7 @@ describe('spoiler-free emoji results', () => {
     expect(guessRows(puzzle, progress)).toEqual(['⬜🟩🟩🟩🟩🟩🟩🟩🟩⬜', '🟩'.repeat(10)]);
     const text = resultText(puzzle, progress, LAUNCH_DAY);
     expect(text).toBe('Sentagram · 15 Oct 2026\n2/3\n⬜🟩🟩🟩🟩🟩🟩🟩🟩⬜\n' + '🟩'.repeat(10) + '\n\n' + GAME_URL);
-    expect(text).not.toContain('wind');
+    expect(text).not.toContain('cotton');
   });
   it('shares X/3 and all three failed guesses rather than a fabricated green reveal row', () => {
     const puzzle = puzzles[0], wrong = puzzle.solutionTokens.map((token) => token.id).reverse();
@@ -299,8 +326,8 @@ describe('insertion and duplicate guesses', () => {
     let state = gameReducer(orderedState(puzzle, wrong), { type: 'check' });
     expect(gameReducer(state, { type: 'check' })).toBe(state);
     const duplicates = [...wrong];
-    const firstWind = duplicates.indexOf(ids[1]), otherWind = duplicates.indexOf(ids[6]);
-    [duplicates[firstWind], duplicates[otherWind]] = [duplicates[otherWind], duplicates[firstWind]];
+    const firstOf = duplicates.indexOf(ids[5]), otherOf = duplicates.indexOf(ids[8]);
+    [duplicates[firstOf], duplicates[otherOf]] = [duplicates[otherOf], duplicates[firstOf]];
     expect(hasGuessed(puzzle, state.daily.guesses, duplicates)).toBe(true);
     state = { ...state, daily: { ...state.daily, selectedIds: duplicates } };
     expect(gameReducer(state, { type: 'check' })).toBe(state);
@@ -312,9 +339,9 @@ describe('insertion and duplicate guesses', () => {
     expect(hasGuessed(puzzle, state.daily.guesses, ids.slice(0, 3))).toBe(false);
   });
   it('distinguishes meaningful capitals when comparing repeated words', () => {
-    const monthPuzzle = puzzles[2], monthIds = monthPuzzle.solutionTokens.map((token) => token.id);
-    const swapped = [...monthIds]; [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
-    expect(hasGuessed(monthPuzzle, [monthIds], swapped)).toBe(false);
+    const namePuzzle = puzzles[2], nameIds = namePuzzle.solutionTokens.map((token) => token.id);
+    const swapped = [...nameIds]; [swapped[1], swapped[2]] = [swapped[2], swapped[1]];
+    expect(hasGuessed(namePuzzle, [nameIds], swapped)).toBe(false);
   });
 });
 
