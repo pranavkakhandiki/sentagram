@@ -63,7 +63,9 @@ h1, h2, h3, p { margin: 0; }
   gap: 20px;
   border-bottom: 1px solid var(--ink);
 }
+.site-title { font: inherit; line-height: 1; }
 .wordmark {
+  display: block;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 44px;
   font-weight: 800;
@@ -84,9 +86,10 @@ h1, h2, h3, p { margin: 0; }
 }
 .game-article { animation: page-in .2s ease-out; }
 .puzzle-heading { text-align: center; }
-.puzzle-heading h1 { font-size: 18px; font-weight: 600; letter-spacing: -.25px; }
+.puzzle-heading h2 { font-size: 18px; font-weight: 600; letter-spacing: -.25px; }
 .dev-label { display: block; margin-top: 7px; color: var(--muted); font-size: 12px; }
 .game-instruction { text-align: center; font-size: 16px; margin: 21px 0 23px; }
+.initial-description { margin-top: 21px; font-size: 16px; line-height: 1.65; text-align: center; }
 
 .sentence-area {
   min-height: 174px;
@@ -348,7 +351,7 @@ h1, h2, h3, p { margin: 0; }
   .site-header { width: calc(100% - 36px); min-height: 82px; }
   .wordmark { font-size: 37px; letter-spacing: -1.6px; }
   .game-main { padding-top: 24px; width: calc(100% - 36px); }
-  .puzzle-heading h1 { font-size: 16px; }
+  .puzzle-heading h2 { font-size: 16px; }
   .game-instruction { font-size: 15px; margin: 18px 0 20px; }
   .sentence-area { min-height: 185px; padding: 17px 10px; }
   .sentence-words, .sentence-sizer { gap: 8px 6px; }

@@ -5,7 +5,7 @@ export function Header({ devMode, onMenu, onHelp }: {
 }) {
   return (
     <header className="site-header">
-      <a className="wordmark" href="#main" aria-label="Sentagram home">Sentagram</a>
+      <h1 className="site-title"><a className="wordmark" href="#main" aria-label="Sentagram home">Sentagram</a></h1>
       <nav className="header-actions" aria-label="Game navigation">
         {devMode && <button className="collection-button" onClick={onMenu}
           aria-label="Open puzzle collection" aria-haspopup="dialog"><Icon name="grid" size={21} /></button>}

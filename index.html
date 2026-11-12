@@ -6,13 +6,53 @@
     <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
-      content="One sentence. Three chances. A fresh Sentagram word puzzle every day."
+      content="Play Sentagram, a free daily word puzzle. Rearrange scrambled words into a clever sentence in three guesses. A new puzzle arrives every day."
     />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://sentagram.win/" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
-    <title>Sentagram — A word-ordering puzzle</title>
+    <title>Sentagram — Daily Sentence Word Game</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sentagram" />
+    <meta property="og:title" content="Sentagram — Daily Sentence Word Game" />
+    <meta property="og:description" content="Play Sentagram, a free daily word puzzle. Rearrange scrambled words into a clever sentence in three guesses. A new puzzle arrives every day." />
+    <meta property="og:url" content="https://sentagram.win/" />
+    <meta property="og:image" content="https://sentagram.win/social-card.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Sentagram, a daily sentence word game. One clever sentence. Three guesses." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Sentagram — Daily Sentence Word Game" />
+    <meta name="twitter:description" content="Play Sentagram, a free daily word puzzle. Rearrange scrambled words into a clever sentence in three guesses. A new puzzle arrives every day." />
+    <meta name="twitter:image" content="https://sentagram.win/social-card.png" />
+    <meta name="twitter:image:alt" content="Sentagram, a daily sentence word game. One clever sentence. Three guesses." />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://sentagram.win/#website",
+        "name": "Sentagram",
+        "url": "https://sentagram.win/",
+        "description": "Play Sentagram, a free daily word puzzle. Rearrange scrambled words into a clever sentence in three guesses. A new puzzle arrives every day.",
+        "inLanguage": "en"
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Readable before JavaScript loads, and when scripts are unavailable.
+         React replaces this introduction with the interactive daily game. -->
+    <div id="root">
+      <a class="skip-link" href="#main">Skip to puzzle</a>
+      <header class="site-header">
+        <h1 class="site-title"><a class="wordmark" href="#main" aria-label="Sentagram home">Sentagram</a></h1>
+      </header>
+      <main id="main" class="game-main">
+        <div class="puzzle-heading"><h2>Daily sentence puzzle</h2></div>
+        <p class="initial-description">Rearrange scrambled words into a clever sentence in three guesses. A new Sentagram word puzzle arrives at midnight, your local time.</p>
+        <noscript><p class="initial-description">Enable JavaScript in your browser to play.</p></noscript>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

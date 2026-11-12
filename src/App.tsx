@@ -48,11 +48,11 @@ export default function App() {
       <main id="main" className="game-main">
         <article className={`game-article ${puzzle.theme === 'pink' ? 'puzzle-pink' : ''}`} key={context}>
           <div className="puzzle-heading">
-            <h1>{practice ? 'Practice · Puzzle ' + String(puzzle.number).padStart(2, '0')
-              : <time dateTime={state.day}>{displayDate(state.day)}</time>}</h1>
+            <h2>{practice ? 'Practice · Puzzle ' + String(puzzle.number).padStart(2, '0')
+              : <time dateTime={state.day}>{displayDate(state.day)}</time>}</h2>
             {state.devMode && <span className="dev-label">{puzzle.difficulty} · Dev mode</span>}
           </div>
-          <p className="game-instruction">Make a sentence. You have three tries.</p>
+          <p className="game-instruction">Rearrange the words into a sentence. Three guesses.</p>
           <PuzzleBoard
             puzzle={puzzle} progress={progress}
             dispatch={(action) => {
