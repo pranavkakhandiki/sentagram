@@ -14,9 +14,10 @@ The Worker uses its own `workers.dev` address.
 - Public endpoint: `https://sentagram-analytics.sentagram.workers.dev`
 - D1 database: `sentagram-analytics`
 - Database ID: `b10231ec-7a48-49db-85a8-005e5c6bb534`
-- The initial tables are created, and daily cleanup is scheduled.
-- The private analytics password is configured. The remaining launch step is
-  publishing the website changes below.
+- The database and private analytics password already exist.
+- For the PST update, apply migration `0003_pst_days.sql` and deploy the Worker
+  using the commands below, then publish the updated website. Pushing to GitHub
+  alone does not deploy the Worker.
 
 The public endpoint is already the website's default in `src/analytics/client.ts`.
 No GitHub repository variable is needed. The account and database IDs in
@@ -59,24 +60,31 @@ Forbidden response; it only accepts requests from `https://sentagram.win`.
 
 ## What the numbers mean
 
-- **Visitors today:** anonymous browsers counted once per UTC day. This estimates
+- **Visitors today:** anonymous browsers counted once per PST day (UTC−8). This estimates
   visitors, not distinct human beings. Browsers/devices count separately. Storage
   clearing or blocked storage can count a returning browser again.
 - **Page views:** one per page load. Word moves, guesses, practice puzzles, opening
   dev mode, and checking analytics do not generate extra views.
 - **Attempted:** a daily game with at least one checked guess, not merely a visit
-  or a word being moved. The result section covers games first recorded in the
-  selected UTC period. A returning player can contribute one game on each day.
+  or a word being moved. The result section defaults to today’s puzzle date,
+  independently of the 1/7/30-day visitor range. Use **Puzzle date (PST)** to
+  view any of the last 90 puzzle dates, or **Today’s puzzle** to return to today.
 - **Solved / failed / unfinished:** solved games have a correct submitted answer;
   failed games used all three guesses; unfinished games still have guesses left.
   The histogram separates solves in one, two and three guesses from failures.
   Unfinished games are not counted as failures or included in that histogram.
 - **Result updates:** a reloaded or retried daily game is counted once. A finished
   game stays finished if an older tab sends an outdated snapshot. Games started
-  before UTC midnight and completed after it stay in their original reporting
-  period. Practice and the code-only special puzzle never contribute results.
-- **Daily visitors:** today's count is partial. All report dates use UTC, while
-  the daily puzzle continues to reset at each player's local midnight.
+  before PST midnight keep their original puzzle date, including a delayed
+  result request arriving after midnight. Practice and the code-only special puzzle never contribute results.
+- **Daily visitors:** today's count is partial. All new traffic and the daily
+  puzzle reset together at midnight PST (08:00 UTC), everywhere in the world.
+  This is fixed UTC−8 year-round, including during daylight saving time.
+- **Historical data:** earlier visitor counts only stored a UTC date, with no
+  timestamp, so they cannot be accurately converted. Those rows are preserved
+  but excluded from PST reports; PST visitor charts begin with this update.
+  Earlier puzzle results are grouped by their recorded puzzle date, under the
+  local-time schedule that was in use then. They are not reconstructed PST visits.
 - **Visitor-days by country:** a returning browser counts again on another day.
   We deliberately do not identify visitors across days. Country is the first
   country seen for that browser that day; the Views column uses each view's
@@ -91,19 +99,19 @@ Forbidden response; it only accepts requests from `https://sentagram.win`.
 ## Data and maintenance
 
 The traffic database contains a random page-load ID, a hash of a daily random
-browser ID, the UTC day, and a country code. Puzzle statistics contain a separate
-hashed game token, puzzle ID, puzzle date, first-recorded UTC date, guess count,
+browser ID, the date, timezone label, and a country code. Puzzle statistics contain a separate
+hashed game token, puzzle ID, puzzle date, first-recorded date, guess count,
 and outcome. Neither table stores IP addresses, names, emails, precise locations,
 word orders, or puzzle answers. Puzzle results are not linked to visitor countries.
 The browser keeps the current game's random token inside the existing analytics
 storage entry, so refreshes and crossing UTC midnight do not duplicate a daily
-game. It is replaced for the next local puzzle date; there is no cross-day player
+game. Both IDs rotate at midnight PST for the next puzzle date; there is no cross-day player
 profile or additional storage key. The traffic ID still rotates daily and is
 separate from game progress. The analytics password is held only in memory while
 the Analytics tab is open; changing tabs, closing the window, or Lock analytics
 clears it. The Worker never sends this password back in a report.
 
-A daily Worker schedule removes records older than the most recent 90 UTC dates.
+A daily Worker schedule removes records older than the most recent 90 PST dates.
 There are no analytics cookies or third-party tracking scripts. Network requests
 to the Worker are best-effort and never prevent the game from loading or playing.
 This does not, by itself, establish a legal consent exemption: local storage and
@@ -123,7 +131,8 @@ the public endpoint in `.env.local` and temporarily allow a local origin in a
 separate test Worker. Never change production's allowed origin to `*`.
 
 GitHub Actions deploys the game, while Worker updates are deployed separately.
-For future backend changes, apply any new migrations and deploy with:
+For this update (and future backend changes), apply the migrations and deploy
+the Worker before pushing the website code:
 
 ```bash
 npx wrangler@4 d1 migrations apply sentagram-analytics --remote --config analytics-worker/wrangler.jsonc

@@ -83,11 +83,11 @@ describe('curated puzzle integrity', () => {
 });
 
 describe('daily calendar', () => {
-  it('keeps the same puzzle all day and changes at local midnight', () => {
-    expect(dayKey(new Date(2026, 9, 15, 0))).toBe(LAUNCH_DAY);
-    expect(dayKey(new Date(2026, 9, 15, 23, 59, 59))).toBe(LAUNCH_DAY);
+  it('keeps the same puzzle worldwide until midnight PST', () => {
+    expect(dayKey(new Date('2026-10-15T08:00:00Z'))).toBe(LAUNCH_DAY);
+    expect(dayKey(new Date('2026-10-16T07:59:59Z'))).toBe(LAUNCH_DAY);
     expect(dailyPuzzle(LAUNCH_DAY)).toBe(puzzles[0]);
-    expect(dailyPuzzle(dayKey(new Date(2026, 9, 16)))).toBe(puzzles[1]);
+    expect(dailyPuzzle(dayKey(new Date('2026-10-16T08:00:00Z')))).toBe(puzzles[1]);
     expect(displayDate(LAUNCH_DAY)).toBe('15 October 2026');
   });
   it('keeps the published schedule today, then cycles all fifty entries through leap days and DST', () => {
@@ -95,17 +95,22 @@ describe('daily calendar', () => {
     expect(dailyPuzzle(EXPANDED_CYCLE_DAY)).toBe(puzzles[20]);
     for (const day of ['2026-11-09', '2026-12-31', '2027-03-14', '2028-02-28']) {
       const [year, month, date] = day.split('-').map(Number);
-      expect(dailyPuzzle(dayKey(new Date(year, month - 1, date + 50)))).toBe(dailyPuzzle(day));
+      expect(dailyPuzzle(dayKey(new Date(Date.UTC(year, month - 1, date + 50, 12))))).toBe(dailyPuzzle(day));
     }
-    expect(new Set(Array.from({ length: 50 }, (_, i) => dailyPuzzle(dayKey(new Date(2026, 10, 9 + i))).id)).size).toBe(50);
+    expect(new Set(Array.from({ length: 50 }, (_, i) => dailyPuzzle(dayKey(new Date(Date.UTC(2026, 10, 9 + i, 12)))).id)).size).toBe(50);
     expect(dailyPuzzle('2026-10-14')).toBe(puzzles[19]);
   });
-  it('schedules the next actual local midnight, rather than a fixed 24-hour wait', () => {
-    const now = new Date(2026, 9, 15, 23, 59, 59, 500);
-    expect(millisecondsToMidnight(now)).toBe(500);
-    const dstDay = new Date(2027, 2, 14);
-    const next = new Date(2027, 2, 15);
-    expect(millisecondsToMidnight(dstDay)).toBe(next.getTime() - dstDay.getTime());
+  it('resets at 08:00 UTC even in summer and on daylight-saving transitions', () => {
+    for (const day of ['2026-10-15', '2027-03-14', '2027-07-01', '2027-11-07', '2028-02-29']) {
+      expect(dayKey(new Date(day + 'T08:00:00Z'))).toBe(day);
+      expect(dayKey(new Date(day + 'T07:59:59Z'))).not.toBe(day);
+      expect(millisecondsToMidnight(new Date(day + 'T07:59:59.500Z'))).toBe(500);
+      expect(millisecondsToMidnight(new Date(day + 'T08:00:00Z'))).toBe(86_400_000);
+    }
+  });
+  it('uses the same instant for players with different local dates', () => {
+    const instants = ['2026-11-15T00:00:00-08:00', '2026-11-15T17:00:00+09:00', '2026-11-14T22:00:00-10:00'];
+    expect(instants.map(instant => dayKey(new Date(instant)))).toEqual(Array(3).fill('2026-11-15'));
   });
   it('validates real dates, including leap years', () => {
     expect(validDay('2028-02-29')).toBe(true);

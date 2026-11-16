@@ -146,7 +146,7 @@ describe('daily game interface', () => {
   });
   it('rotates automatically at midnight and starts with three new guesses', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date(2026, 9, 15, 23, 59, 59));
+    vi.setSystemTime(new Date('2026-10-16T07:59:59Z'));
     save(gameReducer(orderedState(), { type: 'check' }));
     render(<App />);
     expect(screen.getByRole('heading', { name: 'Perfect!' })).toBeInTheDocument();
@@ -158,10 +158,10 @@ describe('daily game interface', () => {
   it('refreshes a sleeping tab when visible again, and rejects a stale-day click before its timer runs', async () => {
     const user = userEvent.setup();
     render(<App />);
-    vi.setSystemTime(new Date(2026, 9, 16, 9));
+    vi.setSystemTime(new Date('2026-10-16T12:00:00Z'));
     fireEvent(document, new Event('visibilitychange'));
     expect(screen.getByRole('heading', { name: '16 October 2026' })).toBeInTheDocument();
-    vi.setSystemTime(new Date(2026, 9, 17, 9));
+    vi.setSystemTime(new Date('2026-10-17T12:00:00Z'));
     await user.click(screen.getByRole('button', { name: 'Add horse to sentence' }));
     expect(screen.getByRole('heading', { name: '17 October 2026' })).toBeInTheDocument();
     expect(screen.getByText('Arrange the words.')).toBeInTheDocument();

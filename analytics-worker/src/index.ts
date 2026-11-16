@@ -1,4 +1,5 @@
 import type { AnalyticsReport, CountryTraffic } from '../../src/analytics/types';
+import { dayKey, shiftDay as shiftedDay, validDay } from '../../src/game/clock';
 
 export interface Statement {
   bind(...values: (string | number)[]): Statement;
@@ -14,9 +15,6 @@ export interface Env {
 }
 type GeoRequest = Request & { cf?: { country?: string } };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const DAY_MS = 86_400_000;
-const dayKey = (date: Date) => date.toISOString().slice(0, 10);
-const shiftedDay = (day: string, offset: number) => dayKey(new Date(Date.parse(day + 'T00:00:00Z') + offset * DAY_MS));
 
 async function digest(value: string) {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)));
@@ -61,15 +59,15 @@ async function collect(request: GeoRequest, env: Env, now: Date) {
   if (typeof payload.eventId !== 'string' || !UUID.test(payload.eventId) ||
     typeof payload.visitorId !== 'string' || !UUID.test(payload.visitorId)) return 400;
   const day = dayKey(now);
-  const visitorHash = Array.from(await digest(day + ':' + payload.visitorId.toLowerCase()), b => b.toString(16).padStart(2, '0')).join('');
+  const visitorHash = Array.from(await digest('PST:' + day + ':' + payload.visitorId.toLowerCase()), b => b.toString(16).padStart(2, '0')).join('');
   const country = /^[A-Z]{2}$/.test(request.cf?.country ?? '') ? request.cf!.country! : 'XX';
   const eventId = payload.eventId.toLowerCase();
   // D1 batches are atomic. Retries cannot count another view or another visitor,
   // even if the caller changes its visitor ID or a retry crosses midnight.
   await env.DB.batch([
-    env.DB.prepare('INSERT OR IGNORE INTO page_views (event_id, day, visitor_hash, country) VALUES (?, ?, ?, ?)')
+    env.DB.prepare("INSERT OR IGNORE INTO page_views (event_id, day, visitor_hash, country, timezone) VALUES (?, ?, ?, ?, 'PST')")
       .bind(eventId, day, visitorHash, country),
-    env.DB.prepare('INSERT OR IGNORE INTO visitors (day, visitor_hash, country) SELECT day, visitor_hash, country FROM page_views WHERE event_id = ?')
+    env.DB.prepare('INSERT OR IGNORE INTO visitors (day, visitor_hash, country, timezone) SELECT day, visitor_hash, country, timezone FROM page_views WHERE event_id = ?')
       .bind(eventId),
   ]);
   return 204;
@@ -79,16 +77,14 @@ async function collectPuzzle(request: Request, env: Env, now: Date) {
   const parsed = await readPayload(request);
   if ('status' in parsed) return parsed.status;
   const { playId, gameDay, puzzleId, attempts, status } = parsed.payload;
-  if (typeof playId !== 'string' || !UUID.test(playId) || typeof gameDay !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(gameDay) || !Number.isFinite(Date.parse(gameDay + 'T00:00:00Z')) ||
-    dayKey(new Date(gameDay + 'T00:00:00Z')) !== gameDay ||
+  if (typeof playId !== 'string' || !UUID.test(playId) || !validDay(gameDay) ||
     typeof puzzleId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(puzzleId) || puzzleId === 'one-little-question' ||
     typeof attempts !== 'number' || !Number.isInteger(attempts) || attempts < 1 || attempts > 3 ||
     typeof status !== 'string' || !['playing', 'solved', 'failed'].includes(status) ||
     (status === 'playing' && attempts === 3) || (status === 'failed' && attempts !== 3)) return 400;
   const today = dayKey(now);
-  // The daily puzzle follows each player's local date, which can differ from UTC.
-  if (gameDay < shiftedDay(today, -1) || gameDay > shiftedDay(today, 1)) return 400;
+  // Allow yesterday for an in-flight request at midnight, never a future puzzle.
+  if (gameDay < shiftedDay(today, -1) || gameDay > today) return 400;
   const playHash = Array.from(await digest(`${gameDay}:${puzzleId}:${playId.toLowerCase()}`), b => b.toString(16).padStart(2, '0')).join('');
   await env.DB.batch([env.DB.prepare(`
     INSERT INTO puzzle_plays (play_hash, started_day, game_day, puzzle_id, attempts, status)
@@ -100,13 +96,13 @@ async function collectPuzzle(request: Request, env: Env, now: Date) {
   return 204;
 }
 
-export async function report(env: Env, days: number, now: Date): Promise<AnalyticsReport> {
+export async function report(env: Env, days: number, now: Date, puzzleDay = dayKey(now)): Promise<AnalyticsReport> {
   const today = dayKey(now), start = shiftedDay(today, 1 - days);
   const results = await env.DB.batch([
-    env.DB.prepare('SELECT day, COUNT(*) AS pageviews FROM page_views WHERE day BETWEEN ? AND ? GROUP BY day').bind(start, today),
-    env.DB.prepare('SELECT day, COUNT(*) AS visitors FROM visitors WHERE day BETWEEN ? AND ? GROUP BY day').bind(start, today),
-    env.DB.prepare('SELECT country, COUNT(*) AS pageviews FROM page_views WHERE day BETWEEN ? AND ? GROUP BY country').bind(start, today),
-    env.DB.prepare('SELECT country, COUNT(*) AS visitors FROM visitors WHERE day BETWEEN ? AND ? GROUP BY country').bind(start, today),
+    env.DB.prepare("SELECT day, COUNT(*) AS pageviews FROM page_views WHERE timezone = 'PST' AND day BETWEEN ? AND ? GROUP BY day").bind(start, today),
+    env.DB.prepare("SELECT day, COUNT(*) AS visitors FROM visitors WHERE timezone = 'PST' AND day BETWEEN ? AND ? GROUP BY day").bind(start, today),
+    env.DB.prepare("SELECT country, COUNT(*) AS pageviews FROM page_views WHERE timezone = 'PST' AND day BETWEEN ? AND ? GROUP BY country").bind(start, today),
+    env.DB.prepare("SELECT country, COUNT(*) AS visitors FROM visitors WHERE timezone = 'PST' AND day BETWEEN ? AND ? GROUP BY country").bind(start, today),
     env.DB.prepare(`SELECT COUNT(*) AS attempted,
       COALESCE(SUM(status = 'solved'), 0) AS solved,
       COALESCE(SUM(status = 'failed'), 0) AS failed,
@@ -114,7 +110,7 @@ export async function report(env: Env, days: number, now: Date): Promise<Analyti
       COALESCE(SUM(status = 'solved' AND attempts = 1), 0) AS one,
       COALESCE(SUM(status = 'solved' AND attempts = 2), 0) AS two,
       COALESCE(SUM(status = 'solved' AND attempts = 3), 0) AS three
-      FROM puzzle_plays WHERE started_day BETWEEN ? AND ?`).bind(start, today),
+      FROM puzzle_plays WHERE game_day = ?`).bind(puzzleDay),
   ]);
   const daily = Array.from({ length: days }, (_, i) => ({ day: shiftedDay(start, i), visitors: 0, pageviews: 0 }));
   const byDay = new Map(daily.map(row => [row.day, row]));
@@ -131,7 +127,7 @@ export async function report(env: Env, days: number, now: Date): Promise<Analyti
   const outcomes = results[4].results[0];
   const puzzleResults = { attempted: Number(outcomes.attempted), solved: Number(outcomes.solved), failed: Number(outcomes.failed),
     unfinished: Number(outcomes.unfinished), one: Number(outcomes.one), two: Number(outcomes.two), three: Number(outcomes.three) };
-  return { timezone: 'UTC', days, generatedAt: now.toISOString(), daily, puzzleResults,
+  return { timezone: 'PST', days, generatedAt: now.toISOString(), daily, puzzleDay, puzzleResults,
     countries: [...countries.values()].sort((a, b) => b.visitors - a.visitors || b.pageviews - a.pageviews || a.code.localeCompare(b.code)) };
 }
 
@@ -167,7 +163,11 @@ export default {
         if (!await authorized(request, env.ANALYTICS_PASSWORD)) return json({ error: 'Unauthorized' }, 401);
         const range = url.searchParams.get('days') ?? '7';
         if (!['1', '7', '30'].includes(range)) return json({ error: 'Invalid date range' }, 400);
-        return json(await report(env, Number(range), new Date()));
+        const now = new Date(), today = dayKey(now);
+        const puzzleDay = url.searchParams.get('puzzleDay') ?? today;
+        if (!validDay(puzzleDay) || puzzleDay > today || puzzleDay < shiftedDay(today, -89))
+          return json({ error: 'Invalid puzzle date' }, 400);
+        return json(await report(env, Number(range), now, puzzleDay));
       }
       return json({ error: 'Method not allowed' }, 405);
     } catch { return json({ error: 'Analytics is temporarily unavailable' }, 503); }
@@ -177,7 +177,7 @@ export default {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM page_views WHERE day < ?').bind(cutoff),
       env.DB.prepare('DELETE FROM visitors WHERE day < ?').bind(cutoff),
-      env.DB.prepare('DELETE FROM puzzle_plays WHERE started_day < ?').bind(cutoff),
+      env.DB.prepare('DELETE FROM puzzle_plays WHERE game_day < ?').bind(cutoff),
     ]);
   },
 };

@@ -52,7 +52,7 @@ export default function App() {
               : <time dateTime={state.day}>{displayDate(state.day)}</time>}</h2>
             {state.devMode && <span className="dev-label">{puzzle.difficulty} · Dev mode</span>}
           </div>
-          <p className="game-instruction">Rearrange the words into a sentence. Three guesses.</p>
+          <p className="game-instruction">Rearrange the words into a sentence.</p>
           <PuzzleBoard
             puzzle={puzzle} progress={progress}
             dispatch={(action) => {

@@ -35,7 +35,7 @@ function saveIdentity() {
 }
 
 function dailyVisitor() {
-  const day = new Date().toISOString().slice(0, 10);
+  const day = dayKey();
   if (memoryVisitor?.day === day) return memoryVisitor.id;
   let game = currentGame(memoryVisitor?.game);
   try {
@@ -101,13 +101,16 @@ export function trackPageview() {
 
 export class AnalyticsAccessError extends Error {}
 
-export async function fetchReport(endpoint: string, password: string, days: number, signal: AbortSignal) {
-  const response = await fetch(`${endpoint}/report?days=${days}`, {
+export async function fetchReport(endpoint: string, password: string, days: number, signal: AbortSignal, puzzleDay?: string) {
+  const query = new URLSearchParams({ days: String(days) });
+  if (puzzleDay) query.set('puzzleDay', puzzleDay);
+  const response = await fetch(`${endpoint}/report?${query}`, {
     headers: { Authorization: `Bearer ${password}` }, signal, credentials: 'omit', cache: 'no-store',
   });
   if (response.status === 401) throw new AnalyticsAccessError('That analytics password doesn’t match.');
   if (!response.ok) throw new Error('Analytics couldn’t load. Check the backend setup or try again.');
   const report = parseReport(await response.json());
   if (report.days !== days) throw new Error('Analytics returned the wrong date range.');
+  if (puzzleDay && report.puzzleDay !== puzzleDay) throw new Error('Analytics returned the wrong puzzle date.');
   return report;
 }

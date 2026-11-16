@@ -46,8 +46,7 @@ export function CompletionPanel({ puzzle, progress, day, practice, onReplay }: {
         <label htmlFor="result-copy">Copy your result:</label>
         <textarea id="result-copy" readOnly value={text} onFocus={(event) => event.target.select()} rows={7} />
       </div>}
-      {practice ? <button className="text-button replay-button" onClick={onReplay}><Icon name="replay" size={15} />Replay practice</button>
-        : puzzle.theme !== 'pink' && <p className="next-puzzle-note">Back tomorrow for a new sentence.</p>}
+      {practice && <button className="text-button replay-button" onClick={onReplay}><Icon name="replay" size={15} />Replay practice</button>}
     </section>
   );
 }

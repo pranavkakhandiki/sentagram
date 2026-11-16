@@ -1,5 +1,5 @@
 import { webcrypto } from 'node:crypto';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
@@ -12,8 +12,8 @@ import type { PuzzleStatus } from '../game/types';
 
 const endpoint = 'https://sentagram-analytics.example.workers.dev';
 const password = 'a-long-private-password-for-tests';
-function sample(days = 7): AnalyticsReport {
-  return { days, timezone: 'UTC', generatedAt: '2026-10-15T12:00:00Z',
+function sample(days = 7, puzzleDay = '2026-10-15'): AnalyticsReport {
+  return { days, puzzleDay, timezone: 'PST', generatedAt: '2026-10-15T12:00:00Z',
     daily: Array.from({ length: days }, (_, i) => ({
       day: new Date(Date.UTC(2026, 9, 15) - (days - i - 1) * 86400000).toISOString().slice(0, 10),
       visitors: i === days - 1 ? 4 : 0, pageviews: i === days - 1 ? 7 : 0,
@@ -49,7 +49,14 @@ describe('analytics inside dev mode', () => {
   it('loads real report values after password entry, changes ranges and refreshes, and forgets access on remount', async () => {
     const user = userEvent.setup();
     vi.stubEnv('VITE_ANALYTICS_URL', endpoint);
-    const request = vi.fn(async (url: string) => Response.json(sample(Number(new URL(url).searchParams.get('days')))));
+    const request = vi.fn(async (url: string) => {
+      const query = new URL(url).searchParams;
+      const report = sample(Number(query.get('days')), query.get('puzzleDay') ?? undefined);
+      if (report.puzzleDay === '2026-10-14') report.puzzleResults = {
+        attempted: 2, solved: 1, failed: 1, unfinished: 0, one: 0, two: 1, three: 0,
+      };
+      return Response.json(report);
+    });
     vi.stubGlobal('fetch', request);
     const app = render(<AnalyticsPanel />);
     expect(request).not.toHaveBeenCalled();
@@ -69,6 +76,14 @@ describe('analytics inside dev mode', () => {
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await screen.findByRole('img', { name: /Daily visitors over 30/ })).toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(3);
+    fireEvent.change(screen.getByLabelText('Puzzle date (PST)'), { target: { value: '2026-10-14' } });
+    expect(await screen.findByText(/14 October 2026 · Past puzzle/)).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Guess distribution' })).getAllByRole('listitem').map(row => row.textContent))
+      .toEqual(['1 guess0', '2 guesses1', '3 guesses0', 'Failed1']);
+    expect(request.mock.calls[3][0]).toBe(endpoint + '/report?days=30&puzzleDay=2026-10-14');
+    await user.click(screen.getByRole('button', { name: 'Today’s puzzle' }));
+    expect(await screen.findByText(/15 October 2026 · In progress/)).toBeInTheDocument();
+    expect(request.mock.calls[4][0]).toBe(endpoint + '/report?days=30');
     app.unmount(); render(<AnalyticsPanel />);
     expect(screen.getByLabelText('Analytics password')).toHaveValue('');
     expect(screen.queryByText('Visitors today')).not.toBeInTheDocument();
@@ -89,7 +104,7 @@ describe('analytics inside dev mode', () => {
     request.mockResolvedValueOnce(Response.json(empty));
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await screen.findByText('No visits recorded for this period yet.')).toBeInTheDocument();
-    expect(screen.getByText('No daily puzzle attempts recorded for this period yet.')).toBeInTheDocument();
+    expect(screen.getByText('No daily puzzle attempts recorded for this date yet.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Lock analytics' }));
     expect(screen.getByLabelText('Analytics password')).toHaveValue('');
   });
@@ -137,7 +152,7 @@ describe('best-effort page view collection', () => {
     const second = JSON.parse(request.mock.calls[1][1].body);
     expect(first.visitorId).toBe(second.visitorId);
     expect(first.eventId).not.toBe(second.eventId);
-    vi.setSystemTime(new Date(2026, 9, 16, 12));
+    vi.setSystemTime(new Date('2026-10-16T12:00:00Z'));
     const tomorrow = await tracker(); tomorrow();
     expect(JSON.parse(request.mock.calls[2][1].body).visitorId).not.toBe(first.visitorId);
     expect(Object.keys(first).sort()).toEqual(['eventId', 'visitorId']);
@@ -191,21 +206,23 @@ describe('best-effort page view collection', () => {
     const reloaded = await gameTracker(); reloaded(dailyGame(2, 'solved'));
     expect(JSON.parse(request.mock.calls[2][1].body).playId).toBe(id);
   });
-  it('keeps a game token across UTC midnight while rotating the traffic ID, and resets it for a new local puzzle day', async () => {
+  it('keeps both identities across UTC midnight and rotates them together at PST midnight', async () => {
     const request = setup();
-    vi.doMock('../game/daily', async importOriginal => ({ ...await importOriginal<typeof import('../game/daily')>(), dayKey: () => '2026-11-12' }));
-    const state = { ...dailyGame(1), day: '2026-11-12' };
     vi.setSystemTime(new Date('2026-11-12T23:59:00Z'));
+    const state = dailyGame(1);
     (await gameTracker())(state);
     const first = JSON.parse(request.mock.calls[0][1].body);
     const visitor = JSON.parse(localStorage.getItem('sentagram.analytics.daily-visitor')!).id;
     vi.setSystemTime(new Date('2026-11-13T00:01:00Z'));
     (await gameTracker())({ ...state, daily: { ...state.daily, guesses: [[], []], status: 'solved' } });
     expect(JSON.parse(request.mock.calls[1][1].body).playId).toBe(first.playId);
-    expect(JSON.parse(localStorage.getItem('sentagram.analytics.daily-visitor')!).id).not.toBe(visitor);
-    vi.doUnmock('../game/daily'); vi.setSystemTime(new Date(2026, 10, 13, 12));
+    expect(JSON.parse(localStorage.getItem('sentagram.analytics.daily-visitor')!).id).toBe(visitor);
+    vi.setSystemTime(new Date('2026-11-13T08:00:00Z'));
     (await gameTracker())(dailyGame(1));
-    expect(JSON.parse(request.mock.calls[2][1].body).playId).not.toBe(first.playId);
+    const next = JSON.parse(request.mock.calls[2][1].body);
+    expect(next.gameDay).toBe('2026-11-13');
+    expect(next.playId).not.toBe(first.playId);
+    expect(JSON.parse(localStorage.getItem('sentagram.analytics.daily-visitor')!).id).not.toBe(visitor);
   });
   it('retries a failed snapshot on the next observation without changing its play token', async () => {
     const request = setup(); request.mockRejectedValueOnce(new Error('Network failure'));

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { analyticsEndpoint, AnalyticsAccessError, fetchReport } from '../analytics/client';
 import type { AnalyticsReport } from '../analytics/types';
 import { PuzzleResultsPanel } from './PuzzleResultsPanel';
+import { millisecondsToMidnight, shiftDay } from '../game/clock';
 
 const SETUP_URL = 'https://github.com/pranavkakhandiki/sentagram/blob/main/docs/analytics.md';
 const count = (value: number) => value.toLocaleString('en-US');
@@ -18,10 +19,19 @@ export function AnalyticsPanel() {
   const [password, setPassword] = useState('');
   const [accessKey, setAccessKey] = useState('');
   const [days, setDays] = useState(7);
+  const [puzzleDay, setPuzzleDay] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [report, setReport] = useState<AnalyticsReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!accessKey) return;
+    const update = () => setRefresh(value => value + 1);
+    const timer = setTimeout(update, millisecondsToMidnight() + 25);
+    window.addEventListener('focus', update);
+    return () => { clearTimeout(timer); window.removeEventListener('focus', update); };
+  }, [accessKey, refresh]);
 
   useEffect(() => {
     if (!endpoint || !accessKey) return;
@@ -29,7 +39,7 @@ export function AnalyticsPanel() {
     let active = true;
     const timeout = setTimeout(() => controller.abort(), 12_000);
     setLoading(true); setError(''); setReport(null);
-    void fetchReport(endpoint, accessKey, days, controller.signal).then(value => {
+    void fetchReport(endpoint, accessKey, days, controller.signal, puzzleDay || undefined).then(value => {
       if (active) setReport(value);
     }).catch((reason: unknown) => {
       if (!active) return;
@@ -41,7 +51,7 @@ export function AnalyticsPanel() {
       if (active) setLoading(false);
     });
     return () => { active = false; clearTimeout(timeout); controller.abort(); };
-  }, [endpoint, accessKey, days, refresh]);
+  }, [endpoint, accessKey, days, puzzleDay, refresh]);
 
   if (!endpoint) return (
     <section className="analytics-setup" aria-label="Analytics setup">
@@ -78,7 +88,7 @@ export function AnalyticsPanel() {
         </div>
         <button className="text-button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh</button>
       </div>
-      <p className="analytics-note">All dates UTC. Today is still in progress.</p>
+      <p className="analytics-note">All dates PST (UTC−8). Today is still in progress. PST visit counts begin with this update; earlier UTC visit counts aren’t included.</p>
       {loading && <p className="analytics-status" role="status">Loading analytics…</p>}
       {error && <p className="dev-error" role="alert">{error}</p>}
       {report && <>
@@ -86,7 +96,8 @@ export function AnalyticsPanel() {
           <div><dt>Visitors today</dt><dd>{count(today?.visitors ?? 0)}</dd></div>
           <div><dt>Page views · {days === 1 ? 'today' : days + ' days'}</dt><dd>{count(totalViews)}</dd></div>
         </dl>
-        <PuzzleResultsPanel results={report.puzzleResults} />
+        <PuzzleResultsPanel results={report.puzzleResults} day={report.puzzleDay}
+          today={today!.day} earliestDay={shiftDay(today!.day, -89)} onDayChange={setPuzzleDay} />
         {totalViews === 0 ? <p className="analytics-status">No visits recorded for this period yet.</p> : <>
           <h3 className="analytics-section-title">Daily visitors</h3>
           <div className="analytics-chart" role="img" aria-label={`Daily visitors over ${days} ${days === 1 ? 'day' : 'days'}. Exact counts in Daily breakdown below.`}>
@@ -99,7 +110,7 @@ export function AnalyticsPanel() {
           <h3 className="analytics-section-title">Where visitors are</h3>
           <p className="analytics-note">Visitors are counted once per day. Someone returning on another day counts again.</p>
           <table className="analytics-table countries-table">
-            <caption className="sr-only">Countries during the selected period. Visitor-days count each browser once per UTC day, assigned to its first country that day.</caption>
+            <caption className="sr-only">Countries during the selected period. Visitor-days count each browser once per PST day, assigned to its first country that day.</caption>
             <thead><tr><th scope="col">Country</th><th scope="col">Visitor-days</th><th scope="col">Views</th></tr></thead>
             <tbody>{report.countries.map(row => <tr key={row.code}>
               <th scope="row"><span className="country-label">{countryName(row.code)}</span><span className="country-bar" aria-hidden="true" style={{ width: (row.visitors / maxCountry * 100) + '%' }} /></th>
@@ -108,13 +119,13 @@ export function AnalyticsPanel() {
           </table>
           <details className="analytics-daily">
             <summary>Daily breakdown</summary>
-            <table className="analytics-table"><caption className="sr-only">Daily visitors and page views, in UTC</caption>
+            <table className="analytics-table"><caption className="sr-only">Daily visitors and page views, in PST</caption>
               <thead><tr><th scope="col">Date</th><th scope="col">Visitors</th><th scope="col">Views</th></tr></thead>
               <tbody>{[...report.daily].reverse().map(row => <tr key={row.day}><th scope="row">{date(row.day)}</th><td>{count(row.visitors)}</td><td>{count(row.pageviews)}</td></tr>)}</tbody>
             </table>
           </details>
         </>}
-        <p className="analytics-note analytics-updated">Updated {new Date(report.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Country locations are approximate.</p>
+        <p className="analytics-note analytics-updated">Updated {new Date(report.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Etc/GMT+8' })} PST. Country locations are approximate.</p>
       </>}
       <button className="text-button analytics-lock" onClick={() => { setAccessKey(''); setPassword(''); setReport(null); setError(''); }}>Lock analytics</button>
     </section>

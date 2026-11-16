@@ -11,11 +11,11 @@ export function HelpDialog({ enabled, onDevChange, onSpecial, onClose }: {
     <Modal title="How to play" onClose={onClose} className="help-modal">
       <p className="help-lede">One sentence. Three chances.</p>
       <ol className="how-to-list">
-        <li>Tap the words to build the intended sentence. Use every tile.</li>
+        <li>Tap the words to build the sentence that makes the most grammatical and logical sense. Use every tile; other grammatical arrangements may not be the intended answer.</li>
         <li>Drag a placed word between other words to move it. Tap to send it back.</li>
         <li>Press Check to use a guess. You can’t submit the same sentence twice. “One swap away” means exchanging just two words would solve it.</li>
       </ol>
-      <p className="help-note">After three misses, we reveal the answer. A new puzzle arrives at midnight, your local time.</p>
+      <p className="help-note">After three misses, we reveal the answer. Everyone gets the same new puzzle at midnight PST (UTC−8).</p>
       <p className="help-note keyboard-note">Names keep their capitals; punctuation is provided. You can also move a focused word with Alt + arrow keys.</p>
       <div className="dev-settings">
         <label className="dev-toggle">

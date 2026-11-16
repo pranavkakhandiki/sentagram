@@ -34,7 +34,7 @@ HTMLDialogElement.prototype.close = function () {
 };
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date(2026, 9, 15, 12));
+  vi.setSystemTime(new Date('2026-10-15T12:00:00Z'));
   localStorage.clear();
   Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
 });
